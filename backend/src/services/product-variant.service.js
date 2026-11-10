@@ -7,7 +7,6 @@ export async function createProductVariant({
   userId,
   variantData,
 }) {
-  // Verify that the product belongs to this organization.
   const product = await Product.findOne({
     _id: variantData.productId,
     organization: organizationId,
@@ -23,7 +22,7 @@ export async function createProductVariant({
   }
 
   try {
-    const variant = await ProductVariant.create({
+    return await ProductVariant.create({
       organization: organizationId,
       product: product._id,
       sku: variantData.sku,
@@ -33,8 +32,6 @@ export async function createProductVariant({
       sellingPrice: variantData.sellingPrice,
       createdBy: userId,
     });
-
-    return variant;
   } catch (error) {
     if (error.code === 11000) {
       throw createServiceError(
@@ -58,12 +55,10 @@ export async function getProductVariants({ organizationId, productId }) {
     throw createServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
   }
 
-  const variants = await ProductVariant.find({
+  return ProductVariant.find({
     organization: organizationId,
     product: product._id,
   }).sort({ createdAt: -1 });
-
-  return variants;
 }
 
 export async function getProductVariantById({
@@ -104,7 +99,6 @@ export async function updateProductVariant({
   userId,
   variantData,
 }) {
-  // Confirm that the product belongs to this organization.
   const product = await Product.findOne({
     _id: productId,
     organization: organizationId,
@@ -117,7 +111,6 @@ export async function updateProductVariant({
   try {
     const updateData = { ...variantData };
 
-    // Normalize an empty barcode to null.
     if (updateData.barcode !== undefined) {
       updateData.barcode = updateData.barcode || null;
     }

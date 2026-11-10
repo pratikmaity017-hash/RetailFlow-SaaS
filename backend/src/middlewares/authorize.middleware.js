@@ -25,3 +25,31 @@ export function authorize(...allowedRoles) {
     return next();
   };
 }
+
+export function authorizeProductStatusChange(req, res, next) {
+  if (req.body.status !== undefined && req.membership?.role !== "owner") {
+    return next(
+      createServiceError(
+        403,
+        "INSUFFICIENT_PERMISSIONS",
+        "Only the organization owner can change product status",
+      ),
+    );
+  }
+
+  return next();
+}
+
+export function authorizeVariantStatusChange(req, res, next) {
+  if (req.body.status !== undefined && req.membership?.role !== "owner") {
+    return next(
+      createServiceError(
+        403,
+        "INSUFFICIENT_PERMISSIONS",
+        "Only the organization owner can change product variant status",
+      ),
+    );
+  }
+
+  return next();
+}

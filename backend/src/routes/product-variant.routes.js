@@ -2,7 +2,10 @@ import { Router } from "express";
 
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
-import { authorize } from "../middlewares/authorize.middleware.js";
+import {
+  authorize,
+  authorizeVariantStatusChange,
+} from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 
 import {
@@ -31,6 +34,7 @@ router.post(
 );
 
 // Get all variants of a product.
+// Get all variants of a product.
 router.get(
   "/",
   authenticate,
@@ -47,12 +51,14 @@ router.get(
   getProductVariantByIdController,
 );
 
+// Update a product variant.
 router.put(
   "/:variantId",
   authenticate,
   requireOrganization,
   authorize("owner", "manager"),
   validate(updateProductVariantSchema),
+  authorizeVariantStatusChange,
   updateProductVariantController,
 );
 

@@ -28,10 +28,15 @@ export const createProductVariantSchema = z
 export const updateProductVariantSchema = z
   .object({
     sku: z.string().trim().min(1).max(100).optional(),
+
     barcode: z.string().trim().max(100).nullable().optional(),
+
     attributes: z.record(z.string(), z.unknown()).optional(),
+
     costPrice: z.number().finite().min(0).optional(),
+
     sellingPrice: z.number().finite().min(0).optional(),
+
     status: z.enum(["active", "inactive"]).optional(),
   })
   .strict()

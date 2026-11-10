@@ -297,7 +297,7 @@ export async function refreshAccessToken({ refreshToken }) {
           },
         },
         {
-          new: false,
+          returnDocument: "before",
           session: dbSession,
         },
       );

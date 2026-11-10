@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
-import { authorize } from "../middlewares/authorize.middleware.js";
+import {
+  authorize,
+  authorizeProductStatusChange,
+} from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import {
   createProductSchema,
@@ -46,15 +49,16 @@ router.get(
 );
 
 // Update a product
+
 router.put(
   "/:productId",
   authenticate,
   requireOrganization,
   authorize("owner", "manager"),
   validate(updateProductSchema),
+  authorizeProductStatusChange,
   updateProductController,
 );
-
 // Deactivate a product (soft delete)
 router.delete(
   "/:productId",
