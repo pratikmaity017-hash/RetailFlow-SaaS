@@ -2,8 +2,12 @@ import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
+import { getUserOrganizationsController } from "../controllers/organization.controller.js";
 
 const router = Router();
+
+// Get all active organizations belonging to the authenticated user.
+router.get("/", authenticate, getUserOrganizationsController);
 
 router.get(
   "/:organizationId/context",

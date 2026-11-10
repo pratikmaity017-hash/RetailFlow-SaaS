@@ -1,4 +1,6 @@
 import express from "express";
+import cors from "cors";
+
 import healthRoute from "./routes/health.route.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 import notFoundMiddleware from "./middlewares/not-found.middleware.js";
@@ -8,6 +10,23 @@ import productRoutes from "./routes/product.routes.js";
 import productVariantRoutes from "./routes/product-variant.routes.js";
 
 const app = express();
+
+const allowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow requests without an Origin header (e.g. server-side clients).
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -20,6 +39,7 @@ app.use(
   "/api/organizations/:organizationId/products/:productId/variants",
   productVariantRoutes,
 );
+
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
