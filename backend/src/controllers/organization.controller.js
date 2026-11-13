@@ -11,6 +11,10 @@ import {
   updateOrganizationMemberRole,
 } from "../services/organization.service.js";
 
+import { createOrganizationInvitation } from "../services/organization-invitation.service.js";
+import { acceptOrganizationInvitation } from "../services/organization-invitation-acceptance.service.js";
+import { revokeOrganizationInvitation } from "../services/organization-invitation-revocation.service.js";
+
 export async function createOrganizationController(req, res, next) {
   try {
     const result = await createOrganization({
@@ -199,6 +203,65 @@ export async function updateOrganizationMemberRoleController(req, res, next) {
       message: "Organization member role updated successfully",
       data: {
         member: result,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createOrganizationInvitationController(req, res, next) {
+  try {
+    const invitation = await createOrganizationInvitation({
+      organizationId: req.organization.id,
+      actorUserId: req.auth.userId,
+      actorRole: req.membership.role,
+      email: req.body.email,
+      role: req.body.role,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Organization invitation sent successfully",
+      data: {
+        invitation,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function acceptOrganizationInvitationController(req, res, next) {
+  try {
+    const result = await acceptOrganizationInvitation({
+      userId: req.auth.userId,
+      token: req.body.token,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization invitation accepted successfully",
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function revokeOrganizationInvitationController(req, res, next) {
+  try {
+    const invitation = await revokeOrganizationInvitation({
+      organizationId: req.organization.id,
+      invitationId: req.params.invitationId,
+      actorRole: req.membership.role,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization invitation revoked successfully",
+      data: {
+        invitation,
       },
     });
   } catch (error) {

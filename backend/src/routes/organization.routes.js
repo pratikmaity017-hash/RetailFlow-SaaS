@@ -20,6 +20,9 @@ import {
   getOrganizationMembersController,
   updateOrganizationMemberRoleController,
   updateOrganizationMemberStatusController,
+  createOrganizationInvitationController,
+  acceptOrganizationInvitationController,
+  revokeOrganizationInvitationController,
 } from "../controllers/organization.controller.js";
 
 import {
@@ -30,6 +33,9 @@ import {
   updateOrganizationMemberRoleSchema,
   updateOrganizationMemberStatusSchema,
   organizationMemberParamsSchema,
+  createOrganizationInvitationSchema,
+  acceptOrganizationInvitationSchema,
+  organizationInvitationParamsSchema,
 } from "../validators/organization.validator.js";
 
 const router = Router();
@@ -146,6 +152,24 @@ router.get(
   getOrganizationMembersController,
 );
 
+router.post(
+  "/:organizationId/invitations",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validate(createOrganizationInvitationSchema),
+  createOrganizationInvitationController,
+);
+
+router.post(
+  "/invitations/accept",
+  authenticate,
+  requireEmailVerified,
+  validate(acceptOrganizationInvitationSchema),
+  acceptOrganizationInvitationController,
+);
+
 // Update an organization member's role (Owner only).
 router.patch(
   "/:organizationId/members/:membershipId/role",
@@ -170,4 +194,13 @@ router.patch(
   updateOrganizationMemberStatusController,
 );
 
+router.delete(
+  "/:organizationId/invitations/:invitationId",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validateParams(organizationInvitationParamsSchema),
+  revokeOrganizationInvitationController,
+);
 export default router;

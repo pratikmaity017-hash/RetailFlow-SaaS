@@ -113,3 +113,37 @@ export const organizationMemberParamsSchema = z
     membershipId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid membership ID"),
   })
   .strict();
+
+export const createOrganizationInvitationSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Invalid invitation email")
+      .max(254, "Email cannot exceed 254 characters"),
+
+    role: z.enum(["manager", "sales_staff"], {
+      error: "Role must be manager or sales_staff",
+    }),
+  })
+  .strict();
+
+export const acceptOrganizationInvitationSchema = z
+  .object({
+    token: z
+      .string()
+      .length(43, "Invalid invitation token")
+      .regex(/^[A-Za-z0-9_-]{43}$/, "Invalid invitation token"),
+  })
+  .strict();
+
+export const organizationInvitationParamsSchema = z
+  .object({
+    organizationId: z
+      .string()
+      .regex(/^[a-f\d]{24}$/i, "Invalid organization ID"),
+
+    invitationId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid invitation ID"),
+  })
+  .strict();
