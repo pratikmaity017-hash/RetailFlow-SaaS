@@ -1,0 +1,228 @@
+.organization-onboarding {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(59, 130, 246, 0.09),
+      transparent 35%
+    ),
+    #f8fafc;
+}
+
+.organization-onboarding-card {
+  width: 100%;
+  max-width: 620px;
+  padding: 40px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 15px 45px rgba(15, 23, 42, 0.07);
+}
+
+.organization-onboarding-heading {
+  margin-bottom: 30px;
+}
+
+.organization-eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.organization-onboarding-heading h1 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.organization-onboarding-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.organization-onboarding form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.organization-onboarding .auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.organization-onboarding .auth-field label,
+.organization-category-heading label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.organization-onboarding .auth-field input,
+.organization-onboarding select {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 13px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  outline: none;
+  font: inherit;
+  font-size: 14px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.organization-onboarding .auth-field input:focus,
+.organization-onboarding select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.organization-category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.organization-category-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.organization-category-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.organization-loading {
+  margin: 0;
+  padding: 14px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.organization-category-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.organization-category-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.organization-category-option:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.organization-category-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.organization-category-option span {
+  line-height: 1.4;
+}
+
+.organization-onboarding .auth-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+  color: #ffffff;
+  background: #2563eb;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.organization-onboarding .auth-submit:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.organization-onboarding .auth-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.organization-verification-note {
+  margin: -12px 0 0;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .organization-onboarding {
+    align-items: flex-start;
+    padding: 24px 14px;
+  }
+
+  .organization-onboarding-card {
+    padding: 26px 20px;
+    border-radius: 14px;
+  }
+
+  .organization-onboarding-heading h1 {
+    font-size: 25px;
+  }
+
+  .organization-category-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .organization-onboarding-card {
+    padding: 22px 15px;
+  }
+}

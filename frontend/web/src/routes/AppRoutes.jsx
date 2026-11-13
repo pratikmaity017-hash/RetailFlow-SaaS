@@ -7,6 +7,7 @@ import RegisterPage from "../features/auth/pages/RegisterPage";
 import VerifyEmailPage from "../features/auth/pages/VerifyEmailPage";
 
 import DashboardPage from "../features/dashboard/pages/DashboardPage";
+import CreateOrganizationPage from "../features/organization/pages/CreateOrganizationPage";
 
 import ProductListPage from "../features/products/pages/ProductListPage";
 import CreateProductPage from "../features/products/pages/CreateProductPage";
@@ -58,6 +59,17 @@ function AppRoutes() {
       />
 
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+
+      {/* Protected Organization Onboarding Route */}
+      <Route
+        path="/organizations/new"
+        element={
+          <ProtectedRoute>
+            <CreateOrganizationPage />
+          </ProtectedRoute>
+        }
+      />
+
       {/* Protected Routes with Shared Sidebar */}
       <Route
         element={

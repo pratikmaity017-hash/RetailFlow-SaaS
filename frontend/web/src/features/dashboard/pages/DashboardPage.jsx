@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation   } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../auth/useAuth";
 import {
@@ -9,6 +9,8 @@ import {
 import { getProducts } from "../../products/productService";
 
 import "./dashboard.css";
+
+const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
 function formatRole(role) {
   if (!role) return "Unknown";
@@ -47,7 +49,6 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Load organizations available to the authenticated user.
   useEffect(() => {
     let isMounted = true;
 
@@ -63,11 +64,28 @@ export default function DashboardPage() {
 
         setOrganizations(availableOrganizations);
 
-        if (availableOrganizations.length === 1) {
-          setSelectedOrganizationId(availableOrganizations[0].organization.id);
-        } else if (availableOrganizations.length === 0) {
-          setError("No active organization is available for your account.");
+        if (availableOrganizations.length === 0) {
+          setSelectedOrganizationId("");
+
+          localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+          return;
         }
+
+        const savedOrganizationId = localStorage.getItem(
+          ORGANIZATION_STORAGE_KEY,
+        );
+
+        const savedOrganizationExists = availableOrganizations.some(
+          (item) => item.organization.id === savedOrganizationId,
+        );
+
+        const organizationId = savedOrganizationExists
+          ? savedOrganizationId
+          : availableOrganizations[0].organization.id;
+
+        setSelectedOrganizationId(organizationId);
+
+        localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
       } catch (err) {
         if (isMounted) {
           setError(err.message || "Unable to load organizations.");
@@ -86,7 +104,6 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Load the selected organization's context.
   useEffect(() => {
     if (!selectedOrganizationId) {
       setOrganizationContext(null);
@@ -119,7 +136,6 @@ export default function DashboardPage() {
     };
   }, [selectedOrganizationId]);
 
-  // Load real product data for the selected organization.
   useEffect(() => {
     if (!selectedOrganizationId) {
       setProducts([]);
@@ -180,7 +196,6 @@ export default function DashboardPage() {
     (product) => product.status === "inactive",
   ).length;
 
-  // Backend already returns products sorted by creation date.
   const recentProducts = products.slice(0, 5);
 
   if (isLoading) {
@@ -193,7 +208,6 @@ export default function DashboardPage() {
 
   return (
     <main className="dashboard-page">
-      {/* Dashboard Header */}
       <header className="dashboard-header">
         <div>
           <p className="dashboard-eyebrow">RETAILFLOW SAAS</p>
@@ -216,52 +230,11 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Registration Success Message */}
       {location.state?.message && (
         <div className="dashboard-success" role="status">
           {location.state.message}
         </div>
       )}
-
-      {/* Organization Context */}
-      <section className="dashboard-context-panel">
-        <div className="dashboard-context-details">
-          <p className="dashboard-context-label">Current Organization</p>
-
-          <h2 className="dashboard-context-value">
-            {selectedOrganizationId
-              ? organizationName
-              : "No organization selected"}
-          </h2>
-
-          {selectedOrganizationId && userRole && (
-            <span className="dashboard-role-badge">{formatRole(userRole)}</span>
-          )}
-        </div>
-
-        {organizations.length > 1 && (
-          <div className="dashboard-organization-control">
-            <label htmlFor="organization-select">Switch Organization</label>
-
-            <select
-              id="organization-select"
-              className="dashboard-select"
-              value={selectedOrganizationId}
-              onChange={(event) =>
-                setSelectedOrganizationId(event.target.value)
-              }
-            >
-              <option value="">Choose an organization</option>
-
-              {organizations.map((item) => (
-                <option key={item.organization.id} value={item.organization.id}>
-                  {item.organization.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </section>
 
       {error && (
         <div className="dashboard-alert" role="alert">
@@ -269,186 +242,299 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Business Overview */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div>
-            <h2 className="dashboard-section-title">Business Overview</h2>
+      {/* Organization Empty State */}
+      {!error && organizations.length === 0 && (
+        <section className="dashboard-onboarding-empty">
+          <div className="dashboard-onboarding-content">
+            <span className="dashboard-onboarding-icon" aria-hidden="true">
+              +
+            </span>
 
-            <p className="dashboard-section-description">
-              An overview of your organization's products.
+            <p className="dashboard-eyebrow">YOUR WORKSPACE</p>
+
+            <h2>Let's set up your business</h2>
+
+            <p>
+              You haven't created or joined an organization yet. Create your
+              business workspace to start managing products and retail
+              operations with RetailFlow.
             </p>
+
+            <Link
+              to="/organizations/new"
+              className="dashboard-onboarding-button"
+            >
+              Create your organization
+              <span aria-hidden="true">→</span>
+            </Link>
+
+            <span className="dashboard-onboarding-note">
+              You can also create your organization later.
+            </span>
           </div>
-        </div>
+        </section>
+      )}
 
-        {!selectedOrganizationId && (
-          <div className="dashboard-empty-state">
-            Select an organization to view business statistics.
-          </div>
-        )}
+      {/* Organization Dashboard */}
+      {organizations.length > 0 && (
+        <>
+          <section className="dashboard-context-panel">
+            <div className="dashboard-workspace-info">
+              <div className="dashboard-workspace-icon" aria-hidden="true">
+                <span>R</span>
+              </div>
 
-        {selectedOrganizationId && !productDataReady && (
-          <div className="dashboard-empty-state">
-            Loading product statistics...
-          </div>
-        )}
+              <div className="dashboard-context-details">
+                <p className="dashboard-context-label">ACTIVE WORKSPACE</p>
 
-        {productDataReady && productsError && (
-          <div className="dashboard-alert" role="alert">
-            {productsError}
-          </div>
-        )}
+                <h2 className="dashboard-context-value">
+                  {selectedOrganizationId
+                    ? organizationName
+                    : "No organization selected"}
+                </h2>
 
-        {productDataReady && !productsError && (
-          <div className="dashboard-stat-grid">
-            {userRole !== "sales_staff" && (
-              <article className="dashboard-stat-card">
-                <p className="dashboard-stat-label">Total Products</p>
+                <div className="dashboard-workspace-meta">
+                  {selectedOrganizationId && userRole && (
+                    <span className="dashboard-role-badge">
+                      {formatRole(userRole)}
+                    </span>
+                  )}
 
-                <h3 className="dashboard-stat-value">{products.length}</h3>
-
-                <p className="dashboard-stat-note">
-                  Products in your organization
-                </p>
-              </article>
-            )}
-
-            <article className="dashboard-stat-card active">
-              <p className="dashboard-stat-label">Active Products</p>
-
-              <h3 className="dashboard-stat-value">{activeProducts}</h3>
-
-              <p className="dashboard-stat-note">Currently active products</p>
-            </article>
-
-            {userRole !== "sales_staff" && (
-              <article className="dashboard-stat-card inactive">
-                <p className="dashboard-stat-label">Inactive Products</p>
-
-                <h3 className="dashboard-stat-value">{inactiveProducts}</h3>
-
-                <p className="dashboard-stat-note">Deactivated products</p>
-              </article>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* Quick Actions */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div>
-            <h2 className="dashboard-section-title">Quick Actions</h2>
-
-            <p className="dashboard-section-description">
-              Quickly access your product management tools.
-            </p>
-          </div>
-        </div>
-
-        <div className="dashboard-actions-grid">
-          <Link to="/products" className="dashboard-action-card">
-            <div>
-              <h3 className="dashboard-action-title">View Products</h3>
-
-              <p className="dashboard-action-description">
-                Browse and manage your organization's products.
-              </p>
+                  {selectedOrganizationId && (
+                    <span className="dashboard-workspace-status">
+                      <span className="dashboard-status-dot" />
+                      Active workspace
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <span className="dashboard-action-arrow">→</span>
-          </Link>
+            <div className="dashboard-workspace-actions">
+              {organizations.length > 1 && (
+                <div className="dashboard-organization-control">
+                  <label htmlFor="organization-select">Switch workspace</label>
 
-          {canCreateProducts && (
-            <Link to="/products/new" className="dashboard-action-card">
+                  <select
+                    id="organization-select"
+                    className="dashboard-select"
+                    value={selectedOrganizationId}
+                    onChange={(event) => {
+                      const organizationId = event.target.value;
+
+                      setSelectedOrganizationId(organizationId);
+
+                      if (organizationId) {
+                        localStorage.setItem(
+                          ORGANIZATION_STORAGE_KEY,
+                          organizationId,
+                        );
+                      } else {
+                        localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+                      }
+                    }}
+                  >
+                    <option value="">Choose an organization</option>
+
+                    {organizations.map((item) => (
+                      <option
+                        key={item.organization.id}
+                        value={item.organization.id}
+                      >
+                        {item.organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <Link
+                to="/organizations/new"
+                className="dashboard-create-organization-button"
+              >
+                <span aria-hidden="true">+</span>
+                Create Organization
+              </Link>
+            </div>
+          </section>
+
+          <section className="dashboard-section">
+            <div className="dashboard-section-header">
               <div>
-                <h3 className="dashboard-action-title">Add New Product</h3>
+                <h2 className="dashboard-section-title">Business Overview</h2>
 
-                <p className="dashboard-action-description">
-                  Add a new product to your organization.
+                <p className="dashboard-section-description">
+                  An overview of your organization's products.
+                </p>
+              </div>
+            </div>
+
+            {!selectedOrganizationId && (
+              <div className="dashboard-empty-state">
+                Select an organization to view business statistics.
+              </div>
+            )}
+
+            {selectedOrganizationId && !productDataReady && (
+              <div className="dashboard-empty-state">
+                Loading product statistics...
+              </div>
+            )}
+
+            {productDataReady && productsError && (
+              <div className="dashboard-alert" role="alert">
+                {productsError}
+              </div>
+            )}
+
+            {productDataReady && !productsError && (
+              <div className="dashboard-stat-grid">
+                {userRole !== "sales_staff" && (
+                  <article className="dashboard-stat-card">
+                    <p className="dashboard-stat-label">Total Products</p>
+                    <h3 className="dashboard-stat-value">{products.length}</h3>
+                    <p className="dashboard-stat-note">
+                      Products in your organization
+                    </p>
+                  </article>
+                )}
+
+                <article className="dashboard-stat-card active">
+                  <p className="dashboard-stat-label">Active Products</p>
+                  <h3 className="dashboard-stat-value">{activeProducts}</h3>
+                  <p className="dashboard-stat-note">
+                    Currently active products
+                  </p>
+                </article>
+
+                {userRole !== "sales_staff" && (
+                  <article className="dashboard-stat-card inactive">
+                    <p className="dashboard-stat-label">Inactive Products</p>
+                    <h3 className="dashboard-stat-value">{inactiveProducts}</h3>
+                    <p className="dashboard-stat-note">Deactivated products</p>
+                  </article>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="dashboard-section">
+            <div className="dashboard-section-header">
+              <div>
+                <h2 className="dashboard-section-title">Quick Actions</h2>
+
+                <p className="dashboard-section-description">
+                  Quickly access your product management tools.
+                </p>
+              </div>
+            </div>
+
+            <div className="dashboard-actions-grid">
+              <Link to="/products" className="dashboard-action-card">
+                <div>
+                  <h3 className="dashboard-action-title">View Products</h3>
+                  <p className="dashboard-action-description">
+                    Browse and manage your organization's products.
+                  </p>
+                </div>
+
+                <span className="dashboard-action-arrow">→</span>
+              </Link>
+
+              {canCreateProducts && (
+                <Link to="/products/new" className="dashboard-action-card">
+                  <div>
+                    <h3 className="dashboard-action-title">Add New Product</h3>
+                    <p className="dashboard-action-description">
+                      Add a new product to your organization.
+                    </p>
+                  </div>
+
+                  <span className="dashboard-action-arrow">→</span>
+                </Link>
+              )}
+            </div>
+          </section>
+
+          <section className="dashboard-section">
+            <div className="dashboard-section-header">
+              <div>
+                <h2 className="dashboard-section-title">Recent Products</h2>
+
+                <p className="dashboard-section-description">
+                  The latest products added to your organization.
                 </p>
               </div>
 
-              <span className="dashboard-action-arrow">→</span>
-            </Link>
-          )}
-        </div>
-      </section>
+              <Link to="/products" className="dashboard-action-arrow">
+                View All →
+              </Link>
+            </div>
 
-      {/* Recent Products */}
-      <section className="dashboard-section">
-        <div className="dashboard-section-header">
-          <div>
-            <h2 className="dashboard-section-title">Recent Products</h2>
+            {!selectedOrganizationId && (
+              <div className="dashboard-empty-state">
+                Select an organization to view its products.
+              </div>
+            )}
 
-            <p className="dashboard-section-description">
-              The latest products added to your organization.
-            </p>
-          </div>
+            {selectedOrganizationId && !productDataReady && (
+              <div className="dashboard-empty-state">
+                Loading recent products...
+              </div>
+            )}
 
-          <Link to="/products" className="dashboard-action-arrow">
-            View All →
-          </Link>
-        </div>
+            {productDataReady && productsError && (
+              <div className="dashboard-empty-state">
+                Recent products are unavailable.
+              </div>
+            )}
 
-        {!selectedOrganizationId && (
-          <div className="dashboard-empty-state">
-            Select an organization to view its products.
-          </div>
-        )}
+            {productDataReady &&
+              !productsError &&
+              recentProducts.length === 0 && (
+                <div className="dashboard-empty-state">
+                  No products have been added yet.
+                </div>
+              )}
 
-        {selectedOrganizationId && !productDataReady && (
-          <div className="dashboard-empty-state">
-            Loading recent products...
-          </div>
-        )}
+            {productDataReady &&
+              !productsError &&
+              recentProducts.length > 0 && (
+                <div className="dashboard-table-wrapper">
+                  <table className="dashboard-table">
+                    <thead>
+                      <tr>
+                        <th>Product Name</th>
+                        <th>Brand</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                      </tr>
+                    </thead>
 
-        {productDataReady && productsError && (
-          <div className="dashboard-empty-state">
-            Recent products are unavailable.
-          </div>
-        )}
-
-        {productDataReady && !productsError && recentProducts.length === 0 && (
-          <div className="dashboard-empty-state">
-            No products have been added yet.
-          </div>
-        )}
-
-        {productDataReady && !productsError && recentProducts.length > 0 && (
-          <div className="dashboard-table-wrapper">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Product Name</th>
-                  <th>Brand</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {recentProducts.map((product) => (
-                  <tr key={product._id}>
-                    <td>{product.name}</td>
-                    <td>{product.brand || "—"}</td>
-                    <td>{product.category || "—"}</td>
-                    <td>
-                      <span
-                        className={`dashboard-status-badge ${product.status}`}
-                      >
-                        {product.status}
-                      </span>
-                    </td>
-                    <td>{formatDate(product.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                    <tbody>
+                      {recentProducts.map((product) => (
+                        <tr key={product._id}>
+                          <td>{product.name}</td>
+                          <td>{product.brand || "—"}</td>
+                          <td>{product.category || "—"}</td>
+                          <td>
+                            <span
+                              className={`dashboard-status-badge ${product.status}`}
+                            >
+                              {product.status}
+                            </span>
+                          </td>
+                          <td>{formatDate(product.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+          </section>
+        </>
+      )}
     </main>
   );
 }
