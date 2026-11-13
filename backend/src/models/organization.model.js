@@ -9,6 +9,7 @@ const organizationSchema = new mongoose.Schema(
       minlength: [2, "Organization name must contain at least 2 characters"],
       maxlength: [150, "Organization name cannot exceed 150 characters"],
     },
+
     slug: {
       type: String,
       required: [true, "Organization slug is required"],
@@ -17,6 +18,7 @@ const organizationSchema = new mongoose.Schema(
       unique: true,
       maxlength: 160,
     },
+
     email: {
       type: String,
       lowercase: true,
@@ -29,6 +31,7 @@ const organizationSchema = new mongoose.Schema(
       trim: true,
       maxlength: 20,
     },
+
     address: {
       street: {
         type: String,
@@ -60,11 +63,29 @@ const organizationSchema = new mongoose.Schema(
         maxlength: 100,
       },
     },
+
+    primaryCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "BusinessCategory",
+      default: null,
+    },
+
+    additionalCategories: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "BusinessCategory",
+        },
+      ],
+      default: [],
+    },
+
     status: {
       type: String,
       enum: ["active", "suspended", "disabled"],
       default: "active",
     },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

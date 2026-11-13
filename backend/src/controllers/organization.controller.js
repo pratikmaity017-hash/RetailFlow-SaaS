@@ -1,6 +1,7 @@
 import {
   createOrganization,
   getUserOrganizations,
+  updateOrganizationCategories,
 } from "../services/organization.service.js";
 
 export async function createOrganizationController(req, res, next) {
@@ -31,6 +32,31 @@ export async function getUserOrganizationsController(req, res, next) {
       message: "Organizations retrieved successfully",
       data: {
         organizations,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrganizationCategoriesController(req, res, next) {
+  try {
+    const organization = await updateOrganizationCategories({
+      organizationId: req.organization.id,
+      primaryCategory: req.body.primaryCategory,
+      additionalCategories: req.body.additionalCategories,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization categories updated successfully",
+      data: {
+        organization: {
+          id: organization._id,
+          name: organization.name,
+          primaryCategory: organization.primaryCategory,
+          additionalCategories: organization.additionalCategories,
+        },
       },
     });
   } catch (error) {

@@ -9,9 +9,13 @@ import { requireEmailVerified } from "../middlewares/require-email-verified.midd
 import {
   createOrganizationController,
   getUserOrganizationsController,
+  updateOrganizationCategoriesController,
 } from "../controllers/organization.controller.js";
 
-import { createOrganizationSchema } from "../validators/organization.validator.js";
+import {
+  createOrganizationSchema,
+  updateOrganizationCategoriesSchema,
+} from "../validators/organization.validator.js";
 
 const router = Router();
 
@@ -66,6 +70,16 @@ router.get(
       },
     });
   },
+);
+
+router.patch(
+  "/:organizationId/categories",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validate(updateOrganizationCategoriesSchema),
+  updateOrganizationCategoriesController,
 );
 
 export default router;

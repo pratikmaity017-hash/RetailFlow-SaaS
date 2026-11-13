@@ -13,6 +13,7 @@ import organizationInventoryRoutes from "./routes/organization-inventory.routes.
 import customerRoutes from "./routes/customer.routes.js";
 import saleRoutes from "./routes/sale.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import businessCategoryRoutes from "./routes/business-category.routes.js";
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(healthRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/business-categories", businessCategoryRoutes);
 app.use("/api/organizations/:organizationId/products", productRoutes);
 app.use(
   "/api/organizations/:organizationId/products/:productId/variants",
