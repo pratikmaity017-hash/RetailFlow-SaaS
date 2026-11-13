@@ -105,6 +105,12 @@ const organizationSchema = new mongoose.Schema(
         default: "12h",
       },
     },
+    
+    ownerGuardVersion: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
 
     status: {
       type: String,

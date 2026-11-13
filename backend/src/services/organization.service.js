@@ -371,56 +371,88 @@ export async function updateOrganizationMemberRole({
   actorUserId,
   role,
 }) {
-  const targetMembership = await Membership.findOne({
-    _id: membershipId,
-    organization: organizationId,
-    status: { $in: ["active", "suspended"] },
-  });
+  const session = await mongoose.startSession();
 
-  if (!targetMembership) {
-    throw createServiceError(
-      404,
-      "MEMBER_NOT_FOUND",
-      "Organization member not found",
-    );
-  }
+  let result;
 
-  if (targetMembership.user.toString() === actorUserId.toString()) {
-    throw createServiceError(
-      400,
-      "SELF_ROLE_CHANGE_NOT_ALLOWED",
-      "You cannot change your own organization role",
-    );
-  }
-
-  if (
-    targetMembership.role === "owner" &&
-    targetMembership.status === "active" &&
-    role !== "owner"
-  ) {
-    const activeOwnerCount = await Membership.countDocuments({
-      organization: organizationId,
-      role: "owner",
-      status: "active",
-    });
-
-    if (activeOwnerCount <= 1) {
-      throw createServiceError(
-        400,
-        "LAST_ACTIVE_OWNER",
-        "The last active owner cannot be demoted",
+  try {
+    await session.withTransaction(async () => {
+      // Serialize membership role/status updates within this organization.
+      const organizationLock = await Organization.updateOne(
+        {
+          _id: organizationId,
+          status: "active",
+        },
+        {
+          $inc: { ownerGuardVersion: 1 },
+        },
+        { session },
       );
-    }
+
+      if (organizationLock.matchedCount !== 1) {
+        throw createServiceError(
+          404,
+          "ORGANIZATION_NOT_FOUND",
+          "Organization not found",
+        );
+      }
+
+      const targetMembership = await Membership.findOne({
+        _id: membershipId,
+        organization: organizationId,
+        status: { $in: ["active", "suspended"] },
+      }).session(session);
+
+      if (!targetMembership) {
+        throw createServiceError(
+          404,
+          "MEMBER_NOT_FOUND",
+          "Organization member not found",
+        );
+      }
+
+      if (targetMembership.user.toString() === actorUserId.toString()) {
+        throw createServiceError(
+          400,
+          "SELF_ROLE_CHANGE_NOT_ALLOWED",
+          "You cannot change your own organization role",
+        );
+      }
+
+      if (
+        targetMembership.role === "owner" &&
+        targetMembership.status === "active" &&
+        role !== "owner"
+      ) {
+        const activeOwnerCount = await Membership.countDocuments({
+          organization: organizationId,
+          role: "owner",
+          status: "active",
+        }).session(session);
+
+        if (activeOwnerCount <= 1) {
+          throw createServiceError(
+            400,
+            "LAST_ACTIVE_OWNER",
+            "The last active owner cannot be demoted",
+          );
+        }
+      }
+
+      targetMembership.role = role;
+      await targetMembership.save({ session });
+
+      result = {
+        membershipId: targetMembership._id.toString(),
+        role: targetMembership.role,
+        status: targetMembership.status,
+      };
+    });
+  } finally {
+    await session.endSession();
   }
 
-  targetMembership.role = role;
-  await targetMembership.save();
-
-  return {
-    membershipId: targetMembership._id.toString(),
-    role: targetMembership.role,
-    status: targetMembership.status,
-  };
+  return result;
 }
 
 export async function updateOrganizationMemberStatus({
@@ -430,60 +462,94 @@ export async function updateOrganizationMemberStatus({
   actorRole,
   status,
 }) {
-  const targetMembership = await Membership.findOne({
-    _id: membershipId,
-    organization: organizationId,
-    status: { $in: ["active", "suspended"] },
-  });
+  const session = await mongoose.startSession();
 
-  if (!targetMembership) {
-    throw createServiceError(
-      404,
-      "MEMBER_NOT_FOUND",
-      "Organization member not found",
-    );
-  }
+  let result;
 
-  if (targetMembership.user.toString() === actorUserId.toString()) {
-    throw createServiceError(
-      400,
-      "SELF_STATUS_CHANGE_NOT_ALLOWED",
-      "You cannot change your own membership status",
-    );
-  }
-  if (actorRole === "manager" && targetMembership.role !== "sales_staff") {
-    throw createServiceError(
-      403,
-      "INSUFFICIENT_PERMISSIONS",
-      "Managers can only manage Sales Staff members",
-    );
-  }
-  if (
-    targetMembership.role === "owner" &&
-    targetMembership.status === "active" &&
-    status === "suspended"
-  ) {
-    const activeOwnerCount = await Membership.countDocuments({
-      organization: organizationId,
-      role: "owner",
-      status: "active",
-    });
-
-    if (activeOwnerCount <= 1) {
-      throw createServiceError(
-        400,
-        "LAST_ACTIVE_OWNER",
-        "The last active owner cannot be suspended",
+  try {
+    await session.withTransaction(async () => {
+      // Serialize membership role/status updates within this organization.
+      const organizationLock = await Organization.updateOne(
+        {
+          _id: organizationId,
+          status: "active",
+        },
+        {
+          $inc: { ownerGuardVersion: 1 },
+        },
+        { session },
       );
-    }
+
+      if (organizationLock.matchedCount !== 1) {
+        throw createServiceError(
+          404,
+          "ORGANIZATION_NOT_FOUND",
+          "Organization not found",
+        );
+      }
+
+      const targetMembership = await Membership.findOne({
+        _id: membershipId,
+        organization: organizationId,
+        status: { $in: ["active", "suspended"] },
+      }).session(session);
+
+      if (!targetMembership) {
+        throw createServiceError(
+          404,
+          "MEMBER_NOT_FOUND",
+          "Organization member not found",
+        );
+      }
+
+      if (targetMembership.user.toString() === actorUserId.toString()) {
+        throw createServiceError(
+          400,
+          "SELF_STATUS_CHANGE_NOT_ALLOWED",
+          "You cannot change your own membership status",
+        );
+      }
+
+      if (actorRole === "manager" && targetMembership.role !== "sales_staff") {
+        throw createServiceError(
+          403,
+          "INSUFFICIENT_PERMISSIONS",
+          "Managers can only manage Sales Staff members",
+        );
+      }
+
+      if (
+        targetMembership.role === "owner" &&
+        targetMembership.status === "active" &&
+        status === "suspended"
+      ) {
+        const activeOwnerCount = await Membership.countDocuments({
+          organization: organizationId,
+          role: "owner",
+          status: "active",
+        }).session(session);
+
+        if (activeOwnerCount <= 1) {
+          throw createServiceError(
+            400,
+            "LAST_ACTIVE_OWNER",
+            "The last active owner cannot be suspended",
+          );
+        }
+      }
+
+      targetMembership.status = status;
+      await targetMembership.save({ session });
+
+      result = {
+        membershipId: targetMembership._id.toString(),
+        role: targetMembership.role,
+        status: targetMembership.status,
+      };
+    });
+  } finally {
+    await session.endSession();
   }
 
-  targetMembership.status = status;
-  await targetMembership.save();
-
-  return {
-    membershipId: targetMembership._id.toString(),
-    role: targetMembership.role,
-    status: targetMembership.status,
-  };
+  return result;
 }
