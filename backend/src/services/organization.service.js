@@ -333,3 +333,157 @@ export async function updateOrganizationSettings({ organizationId, settings }) {
     ...(organization.settings || {}),
   };
 }
+
+export async function getOrganizationMembers({ organizationId }) {
+  const memberships = await Membership.find({
+    organization: organizationId,
+    status: { $in: ["active", "suspended"] },
+  })
+    .select("_id user role status createdAt updatedAt")
+    .populate({
+      path: "user",
+      select: "name email status emailVerifiedAt",
+    })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  return memberships
+    .filter((membership) => membership.user)
+    .map((membership) => ({
+      membershipId: membership._id.toString(),
+      user: {
+        id: membership.user._id.toString(),
+        name: membership.user.name,
+        email: membership.user.email,
+        status: membership.user.status,
+        emailVerifiedAt: membership.user.emailVerifiedAt,
+      },
+      role: membership.role,
+      status: membership.status,
+      joinedAt: membership.createdAt,
+      updatedAt: membership.updatedAt,
+    }));
+}
+
+export async function updateOrganizationMemberRole({
+  organizationId,
+  membershipId,
+  actorUserId,
+  role,
+}) {
+  const targetMembership = await Membership.findOne({
+    _id: membershipId,
+    organization: organizationId,
+    status: { $in: ["active", "suspended"] },
+  });
+
+  if (!targetMembership) {
+    throw createServiceError(
+      404,
+      "MEMBER_NOT_FOUND",
+      "Organization member not found",
+    );
+  }
+
+  if (targetMembership.user.toString() === actorUserId.toString()) {
+    throw createServiceError(
+      400,
+      "SELF_ROLE_CHANGE_NOT_ALLOWED",
+      "You cannot change your own organization role",
+    );
+  }
+
+  if (
+    targetMembership.role === "owner" &&
+    targetMembership.status === "active" &&
+    role !== "owner"
+  ) {
+    const activeOwnerCount = await Membership.countDocuments({
+      organization: organizationId,
+      role: "owner",
+      status: "active",
+    });
+
+    if (activeOwnerCount <= 1) {
+      throw createServiceError(
+        400,
+        "LAST_ACTIVE_OWNER",
+        "The last active owner cannot be demoted",
+      );
+    }
+  }
+
+  targetMembership.role = role;
+  await targetMembership.save();
+
+  return {
+    membershipId: targetMembership._id.toString(),
+    role: targetMembership.role,
+    status: targetMembership.status,
+  };
+}
+
+export async function updateOrganizationMemberStatus({
+  organizationId,
+  membershipId,
+  actorUserId,
+  actorRole,
+  status,
+}) {
+  const targetMembership = await Membership.findOne({
+    _id: membershipId,
+    organization: organizationId,
+    status: { $in: ["active", "suspended"] },
+  });
+
+  if (!targetMembership) {
+    throw createServiceError(
+      404,
+      "MEMBER_NOT_FOUND",
+      "Organization member not found",
+    );
+  }
+
+  if (targetMembership.user.toString() === actorUserId.toString()) {
+    throw createServiceError(
+      400,
+      "SELF_STATUS_CHANGE_NOT_ALLOWED",
+      "You cannot change your own membership status",
+    );
+  }
+  if (actorRole === "manager" && targetMembership.role !== "sales_staff") {
+    throw createServiceError(
+      403,
+      "INSUFFICIENT_PERMISSIONS",
+      "Managers can only manage Sales Staff members",
+    );
+  }
+  if (
+    targetMembership.role === "owner" &&
+    targetMembership.status === "active" &&
+    status === "suspended"
+  ) {
+    const activeOwnerCount = await Membership.countDocuments({
+      organization: organizationId,
+      role: "owner",
+      status: "active",
+    });
+
+    if (activeOwnerCount <= 1) {
+      throw createServiceError(
+        400,
+        "LAST_ACTIVE_OWNER",
+        "The last active owner cannot be suspended",
+      );
+    }
+  }
+
+  targetMembership.status = status;
+  await targetMembership.save();
+
+  return {
+    membershipId: targetMembership._id.toString(),
+    role: targetMembership.role,
+    status: targetMembership.status,
+  };
+}

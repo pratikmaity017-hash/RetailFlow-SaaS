@@ -92,3 +92,24 @@ export const updateOrganizationSettingsSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one setting must be provided",
   });
+
+export const updateOrganizationMemberRoleSchema = z
+  .object({
+    role: z.enum(["owner", "manager", "sales_staff"]),
+  })
+  .strict();
+
+export const updateOrganizationMemberStatusSchema = z
+  .object({
+    status: z.enum(["active", "suspended"]),
+  })
+  .strict();
+
+export const organizationMemberParamsSchema = z
+  .object({
+    organizationId: z
+      .string()
+      .regex(/^[a-f\d]{24}$/i, "Invalid organization ID"),
+    membershipId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid membership ID"),
+  })
+  .strict();

@@ -6,6 +6,9 @@ import {
   updateOrganizationProfile,
   getOrganizationSettings,
   updateOrganizationSettings,
+  updateOrganizationMemberStatus,
+  getOrganizationMembers,
+  updateOrganizationMemberRole,
 } from "../services/organization.service.js";
 
 export async function createOrganizationController(req, res, next) {
@@ -135,6 +138,67 @@ export async function updateOrganizationSettingsController(req, res, next) {
       message: "Organization settings updated successfully",
       data: {
         settings,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrganizationMemberStatusController(req, res, next) {
+  try {
+    const result = await updateOrganizationMemberStatus({
+      organizationId: req.organization.id,
+      membershipId: req.params.membershipId,
+      actorUserId: req.auth.userId,
+      actorRole: req.membership.role,
+      status: req.body.status,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization member status updated successfully",
+      data: {
+        member: result,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getOrganizationMembersController(req, res, next) {
+  try {
+    const members = await getOrganizationMembers({
+      organizationId: req.organization.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization members retrieved successfully",
+      data: {
+        members,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrganizationMemberRoleController(req, res, next) {
+  try {
+    const result = await updateOrganizationMemberRole({
+      organizationId: req.organization.id,
+      membershipId: req.params.membershipId,
+      actorUserId: req.auth.userId,
+      role: req.body.role,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization member role updated successfully",
+      data: {
+        member: result,
       },
     });
   } catch (error) {

@@ -3,7 +3,10 @@ import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
-import { validate } from "../middlewares/validate.middleware.js";
+import {
+  validate,
+  validateParams,
+} from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 
 import {
@@ -14,6 +17,9 @@ import {
   updateOrganizationProfileController,
   getOrganizationSettingsController,
   updateOrganizationSettingsController,
+  getOrganizationMembersController,
+  updateOrganizationMemberRoleController,
+  updateOrganizationMemberStatusController,
 } from "../controllers/organization.controller.js";
 
 import {
@@ -21,6 +27,9 @@ import {
   updateOrganizationCategoriesSchema,
   updateOrganizationProfileSchema,
   updateOrganizationSettingsSchema,
+  updateOrganizationMemberRoleSchema,
+  updateOrganizationMemberStatusSchema,
+  organizationMemberParamsSchema,
 } from "../validators/organization.validator.js";
 
 const router = Router();
@@ -126,6 +135,39 @@ router.patch(
   authorize("owner", "manager"),
   validate(updateOrganizationSettingsSchema),
   updateOrganizationSettingsController,
+);
+
+// Get all organization members.
+router.get(
+  "/:organizationId/members",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getOrganizationMembersController,
+);
+
+// Update an organization member's role (Owner only).
+router.patch(
+  "/:organizationId/members/:membershipId/role",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(organizationMemberParamsSchema),
+  validate(updateOrganizationMemberRoleSchema),
+  updateOrganizationMemberRoleController,
+);
+
+// Update an organization member's status (Owner and Manager).
+router.patch(
+  "/:organizationId/members/:membershipId/status",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validateParams(organizationMemberParamsSchema),
+  validate(updateOrganizationMemberStatusSchema),
+  updateOrganizationMemberStatusController,
 );
 
 export default router;
