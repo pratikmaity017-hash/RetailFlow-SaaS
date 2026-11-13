@@ -1,13 +1,29 @@
 import { Router } from "express";
+
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
-import { getUserOrganizationsController } from "../controllers/organization.controller.js";
+import { validate } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
+
+import {
+  createOrganizationController,
+  getUserOrganizationsController,
+} from "../controllers/organization.controller.js";
+
+import { createOrganizationSchema } from "../validators/organization.validator.js";
 
 const router = Router();
 
-// Get all active organizations belonging to the authenticated user.
+// Create an organization and become its owner.
+router.post(
+  "/",
+  authenticate,
+  requireEmailVerified,
+  validate(createOrganizationSchema),
+  createOrganizationController,
+);
+
 // Get all active organizations belonging to the authenticated user.
 router.get(
   "/",
@@ -51,4 +67,5 @@ router.get(
     });
   },
 );
+
 export default router;

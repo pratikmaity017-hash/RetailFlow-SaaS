@@ -3,8 +3,7 @@ import crypto from "node:crypto";
 
 import User from "../models/user.model.js";
 import AuthIdentity from "../models/auth-identity.model.js";
-import Organization from "../models/organization.model.js";
-import Membership from "../models/membership.model.js";
+
 import RefreshSession from "../models/refresh-session.model.js";
 import { env } from "../config/env.js";
 import { sendEmailVerification } from "./email-verification.service.js";
@@ -30,25 +29,7 @@ function validatePasswordLength(password) {
   }
 }
 
-function generateOrganizationSlug(name) {
-  const baseSlug = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  const safeBaseSlug = baseSlug || "organization";
-  const uniqueSuffix = crypto.randomUUID().slice(0, 8);
-
-  return `${safeBaseSlug}-${uniqueSuffix}`;
-}
-
-export async function registerUser({
-  name,
-  email,
-  password,
-  organizationName,
-}) {
+export async function registerUser({ name, email, password }) {
   // Normalize email before checking for an existing account.
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -70,9 +51,6 @@ export async function registerUser({
 
   // Hash password before storing it.
   const passwordHash = await hashPassword(password);
-
-  // Generate a unique organization slug.
-  const organizationSlug = generateOrganizationSlug(organizationName);
 
   const session = await mongoose.startSession();
 
@@ -114,48 +92,11 @@ export async function registerUser({
         authIdentity,
       };
 
-      // 3. Create Organization.
-      const [organization] = await Organization.create(
-        [
-          {
-            name: organizationName,
-            slug: organizationSlug,
-            createdBy: user._id,
-          },
-        ],
-        { session },
-      );
-
-      // 4. Create Membership.
-      const [membership] = await Membership.create(
-        [
-          {
-            user: user._id,
-            organization: organization._id,
-            role: "owner",
-            status: "active",
-          },
-        ],
-        { session },
-      );
-
       registeredData = {
         user: {
           id: user._id,
           name: user.name,
           email: user.email,
-        },
-
-        organization: {
-          id: organization._id,
-          name: organization.name,
-          slug: organization.slug,
-        },
-
-        membership: {
-          id: membership._id,
-          role: membership.role,
-          status: membership.status,
         },
       };
     });
@@ -180,7 +121,7 @@ export async function registerUser({
     await session.endSession();
   }
 
-  // 5. Send verification email after successful transaction.
+  // 3. Send verification email after successful transaction.
   // Email delivery failure must not undo registration.
   try {
     await sendEmailVerification(verificationData);

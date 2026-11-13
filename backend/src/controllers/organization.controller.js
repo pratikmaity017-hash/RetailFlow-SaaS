@@ -1,4 +1,24 @@
-import { getUserOrganizations } from "../services/organization.service.js";
+import {
+  createOrganization,
+  getUserOrganizations,
+} from "../services/organization.service.js";
+
+export async function createOrganizationController(req, res, next) {
+  try {
+    const result = await createOrganization({
+      userId: req.auth.userId,
+      name: req.body.name,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Organization created successfully",
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export async function getUserOrganizationsController(req, res, next) {
   try {

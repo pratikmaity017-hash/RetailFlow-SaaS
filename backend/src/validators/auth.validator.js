@@ -18,12 +18,6 @@ export const registerSchema = z
       .string()
       .min(8, "Password must contain at least 8 characters")
       .max(72, "Password cannot exceed 72 characters"),
-
-    organizationName: z
-      .string()
-      .trim()
-      .min(2, "Organization name must contain at least 2 characters")
-      .max(150, "Organization name cannot exceed 150 characters"),
   })
   .strict();
 
