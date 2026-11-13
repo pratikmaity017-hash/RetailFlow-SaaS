@@ -61,3 +61,34 @@ export const updateOrganizationProfileSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one profile field must be provided",
   });
+
+export const updateOrganizationSettingsSchema = z
+  .object({
+    locale: z.enum(["en-IN"]).optional(),
+
+    timezone: z
+      .string()
+      .trim()
+      .min(1, "Timezone is required")
+      .max(100, "Timezone cannot exceed 100 characters")
+      .refine((timezone) => {
+        try {
+          new Intl.DateTimeFormat("en-US", {
+            timeZone: timezone,
+          });
+
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Invalid IANA timezone")
+      .optional(),
+
+    dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).optional(),
+
+    timeFormat: z.enum(["12h", "24h"]).optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one setting must be provided",
+  });

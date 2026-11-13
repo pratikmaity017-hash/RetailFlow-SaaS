@@ -12,12 +12,15 @@ import {
   updateOrganizationCategoriesController,
   getOrganizationProfileController,
   updateOrganizationProfileController,
+  getOrganizationSettingsController,
+  updateOrganizationSettingsController,
 } from "../controllers/organization.controller.js";
 
 import {
   createOrganizationSchema,
   updateOrganizationCategoriesSchema,
   updateOrganizationProfileSchema,
+  updateOrganizationSettingsSchema,
 } from "../validators/organization.validator.js";
 
 const router = Router();
@@ -103,6 +106,26 @@ router.patch(
   authorize("owner", "manager"),
   validate(updateOrganizationProfileSchema),
   updateOrganizationProfileController,
+);
+
+// Get organization settings.
+router.get(
+  "/:organizationId/settings",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getOrganizationSettingsController,
+);
+
+// Update organization settings.
+router.patch(
+  "/:organizationId/settings",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validate(updateOrganizationSettingsSchema),
+  updateOrganizationSettingsController,
 );
 
 export default router;

@@ -80,6 +80,32 @@ const organizationSchema = new mongoose.Schema(
       default: [],
     },
 
+    settings: {
+      locale: {
+        type: String,
+        trim: true,
+        default: "en-IN",
+      },
+
+      timezone: {
+        type: String,
+        trim: true,
+        default: "Asia/Kolkata",
+      },
+
+      dateFormat: {
+        type: String,
+        enum: ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"],
+        default: "DD/MM/YYYY",
+      },
+
+      timeFormat: {
+        type: String,
+        enum: ["12h", "24h"],
+        default: "12h",
+      },
+    },
+
     status: {
       type: String,
       enum: ["active", "suspended", "disabled"],

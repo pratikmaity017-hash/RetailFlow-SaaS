@@ -4,6 +4,8 @@ import {
   updateOrganizationCategories,
   getOrganizationProfile,
   updateOrganizationProfile,
+  getOrganizationSettings,
+  updateOrganizationSettings,
 } from "../services/organization.service.js";
 
 export async function createOrganizationController(req, res, next) {
@@ -96,6 +98,43 @@ export async function updateOrganizationProfileController(req, res, next) {
       message: "Organization profile updated successfully",
       data: {
         organization,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getOrganizationSettingsController(req, res, next) {
+  try {
+    const settings = await getOrganizationSettings({
+      organizationId: req.organization.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization settings retrieved successfully",
+      data: {
+        settings,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrganizationSettingsController(req, res, next) {
+  try {
+    const settings = await updateOrganizationSettings({
+      organizationId: req.organization.id,
+      settings: req.body,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization settings updated successfully",
+      data: {
+        settings,
       },
     });
   } catch (error) {

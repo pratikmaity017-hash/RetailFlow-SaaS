@@ -7,6 +7,13 @@ import Membership from "../models/membership.model.js";
 import BusinessCategory from "../models/business-category.model.js";
 import { createServiceError } from "../utils/service-error.util.js";
 
+const DEFAULT_ORGANIZATION_SETTINGS = {
+  locale: "en-IN",
+  timezone: "Asia/Kolkata",
+  dateFormat: "DD/MM/YYYY",
+  timeFormat: "12h",
+};
+
 function generateOrganizationSlug(name) {
   const baseSlug = name
     .toLowerCase()
@@ -151,7 +158,7 @@ export async function updateOrganizationCategories({
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   )
@@ -246,7 +253,7 @@ export async function updateOrganizationProfile({
       $set: updates,
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   )
@@ -271,4 +278,58 @@ export async function updateOrganizationProfile({
   }
 
   return organization;
+}
+
+export async function getOrganizationSettings({ organizationId }) {
+  const organization = await Organization.findById(organizationId)
+    .select("settings")
+    .lean();
+
+  if (!organization) {
+    throw createServiceError(
+      404,
+      "ORGANIZATION_NOT_FOUND",
+      "Organization not found",
+    );
+  }
+
+  return {
+    ...DEFAULT_ORGANIZATION_SETTINGS,
+    ...(organization.settings || {}),
+  };
+}
+
+export async function updateOrganizationSettings({ organizationId, settings }) {
+  const updates = {};
+
+  // Update only the settings provided by the client.
+  for (const [key, value] of Object.entries(settings)) {
+    updates[`settings.${key}`] = value;
+  }
+
+  const organization = await Organization.findByIdAndUpdate(
+    organizationId,
+    {
+      $set: updates,
+    },
+    {
+      returnDocument: "after",
+      runValidators: true,
+    },
+  )
+    .select("settings")
+    .lean();
+
+  if (!organization) {
+    throw createServiceError(
+      404,
+      "ORGANIZATION_NOT_FOUND",
+      "Organization not found",
+    );
+  }
+
+  return {
+    ...DEFAULT_ORGANIZATION_SETTINGS,
+    ...(organization.settings || {}),
+  };
 }
