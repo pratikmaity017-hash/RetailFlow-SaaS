@@ -189,10 +189,14 @@ export async function createOrganizationInvitation({
 
   // Send the invitation email.
   try {
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: normalizedEmail,
       ...emailContent,
     });
+
+    if (!emailResult?.accepted?.length || emailResult.rejected?.length) {
+      throw new Error("Invitation email was not accepted by the mail server.");
+    }
   } catch (error) {
     // Do not leave an unusable pending invitation if email delivery fails.
     await OrganizationInvitation.updateOne(
