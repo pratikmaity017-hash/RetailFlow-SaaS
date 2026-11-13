@@ -23,6 +23,7 @@ import {
 } from "../validators/auth.validator.js";
 
 import { authenticate } from "../middlewares/authenticate.middleware.js";
+import User from "../models/user.model.js";
 
 const router = Router();
 
@@ -44,15 +45,35 @@ router.post(
   verifyEmailController,
 );
 
-router.get("/me", authenticate, (req, res) => {
-  return res.status(200).json({
-    success: true,
-    message: "Authentication successful",
-    data: {
-      userId: req.auth.userId,
-      sessionId: req.auth.sessionId,
-    },
-  });
+router.get("/me", authenticate, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.auth.userId).select(
+      "_id name email emailVerifiedAt",
+    );
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User account is unavailable",
+        code: "ACCOUNT_UNAVAILABLE",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Authentication successful",
+      data: {
+        userId: req.auth.userId,
+        sessionId: req.auth.sessionId,
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        emailVerifiedAt: user.emailVerifiedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/logout", authenticate, logout);

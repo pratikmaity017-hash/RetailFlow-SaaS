@@ -4,6 +4,7 @@ import { useAuth } from "../features/auth/useAuth";
 
 import LoginPage from "../features/auth/pages/LoginPage";
 import RegisterPage from "../features/auth/pages/RegisterPage";
+import VerifyEmailPage from "../features/auth/pages/VerifyEmailPage";
 
 import DashboardPage from "../features/dashboard/pages/DashboardPage";
 
@@ -56,6 +57,7 @@ function AppRoutes() {
         }
       />
 
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       {/* Protected Routes with Shared Sidebar */}
       <Route
         element={

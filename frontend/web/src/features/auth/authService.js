@@ -1,6 +1,6 @@
 import apiClient from "../../services/api/apiClient";
 
-// Register a new user and organization.
+// Register a new user account.
 export async function registerUser(userData) {
   const response = await apiClient.post("/api/auth/register", userData);
   return response.data;
@@ -32,6 +32,31 @@ export async function getCurrentUser(accessToken) {
   return response.data;
 }
 
+// Send an email verification email to the authenticated user.
+// Send an email verification email to the authenticated user.
+export async function sendEmailVerification(accessToken) {
+  const response = await apiClient.post(
+    "/api/auth/email-verification/send",
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  return response.data;
+}
+
+// Verify an email address using the verification token.
+export async function verifyEmail(token) {
+  const response = await apiClient.post("/api/auth/email-verification/verify", {
+    token,
+  });
+
+  return response.data;
+}
+
 // Logout the current session.
 export async function logoutUser(accessToken) {
   const response = await apiClient.post(
@@ -43,6 +68,14 @@ export async function logoutUser(accessToken) {
       },
     },
   );
+
+  return response.data;
+}
+
+export async function googleLogin(idToken) {
+  const response = await apiClient.post("/api/auth/google", {
+    idToken,
+  });
 
   return response.data;
 }
