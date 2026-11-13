@@ -350,13 +350,13 @@ export async function getLowStockInventory({
             },
           },
         ],
-        metadata: [{ $count: "totalMovements" }],
+        metadata: [{ $count: "totalItems" }],
       },
     },
   ]);
 
   const inventory = result[0]?.inventory ?? [];
-  const totalItems = result[0]?.metadata[0]?.totalMovements ?? 0;
+  const totalItems = result[0]?.metadata[0]?.totalItems ?? 0;
 
   return {
     inventory,
