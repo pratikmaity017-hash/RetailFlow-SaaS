@@ -4,6 +4,7 @@ import {
   refreshAccessToken,
   logoutUser,
   logoutAllSessions,
+  googleLoginUser,
 } from "../services/auth.service.js";
 
 import {
@@ -36,6 +37,24 @@ export async function login(req, res, next) {
     return res.status(200).json({
       success: true,
       message: "Login successful",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function googleLogin(req, res, next) {
+  try {
+    const result = await googleLoginUser({
+      idToken: req.body.idToken,
+      userAgent: req.get("user-agent"),
+      ipAddress: req.ip,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Google login successful",
       data: result,
     });
   } catch (error) {

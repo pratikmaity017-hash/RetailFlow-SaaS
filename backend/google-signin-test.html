@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetailFlow - Google Sign-In Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 650px;
+        margin: 60px auto;
+        padding: 20px;
+      }
+      button {
+        padding: 10px 16px;
+        cursor: pointer;
+      }
+      pre {
+        padding: 16px;
+        background: #f3f3f3;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>RetailFlow Google Sign-In Test</h1>
+    <p>Sign in with Google to test your backend authentication.</p>
+
+    <div id="google-button"></div>
+
+    <h3>Backend response</h3>
+    <pre id="result">Waiting for Google Sign-In...</pre>
+
+    <script>
+      const GOOGLE_CLIENT_ID = "377748889881-ir9gdmst4o4lkm2736oos6revisgnpsb.apps.googleusercontent.com";
+      const API_URL = "http://localhost:3000/api/auth/google";
+
+      const resultElement = document.getElementById("result");
+
+      async function handleGoogleResponse(response) {
+        resultElement.textContent = "Sending Google ID token to backend...";
+
+        try {
+          const apiResponse = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              idToken: response.credential,
+            }),
+          });
+
+          const data = await apiResponse.json();
+
+          resultElement.textContent = JSON.stringify(
+            {
+              status: apiResponse.status,
+              response: data,
+            },
+            null,
+            2,
+          );
+        } catch (error) {
+          resultElement.textContent = "Request failed: " + error.message;
+        }
+      }
+
+      window.onload = function () {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleResponse,
+        });
+
+        google.accounts.id.renderButton(
+          document.getElementById("google-button"),
+          {
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+          },
+        );
+      };
+    </script>
+  </body>
+</html>

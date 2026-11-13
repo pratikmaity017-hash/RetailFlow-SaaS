@@ -9,6 +9,7 @@ import RefreshSession from "../models/refresh-session.model.js";
 import { env } from "../config/env.js";
 import { sendEmailVerification } from "./email-verification.service.js";
 
+import { verifyGoogleIdToken } from "../utils/google-id-token.util.js";
 import { hashPassword, comparePassword } from "../utils/password.util.js";
 import {
   generateAccessToken,
@@ -202,7 +203,9 @@ export async function loginUser({ email, password, userAgent, ipAddress }) {
     email: normalizedEmail,
   }).select("+passwordHash");
 
-  if (!user) {
+  // Google-only accounts do not have a password hash.
+  // Return the same error as invalid credentials.
+  if (!user || !user.passwordHash) {
     throw createServiceError(
       401,
       "INVALID_CREDENTIALS",
@@ -228,19 +231,15 @@ export async function loginUser({ email, password, userAgent, ipAddress }) {
     );
   }
 
-  // Generate refresh token.
   const refreshToken = generateRefreshToken();
   const tokenHash = hashRefreshToken(refreshToken);
 
-  // Create a unique session family.
   const familyId = crypto.randomUUID();
 
-  // Calculate session expiration.
   const expiresAt = new Date(
     Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  // Save the refresh session.
   const session = await RefreshSession.create({
     user: user._id,
     tokenHash,
@@ -250,7 +249,6 @@ export async function loginUser({ email, password, userAgent, ipAddress }) {
     ipAddress,
   });
 
-  // Generate access token.
   const accessToken = generateAccessToken({
     sub: user._id.toString(),
     sid: session._id.toString(),
@@ -464,5 +462,158 @@ export async function logoutAllSessions({ userId }) {
 
   return {
     revokedSessions: result.modifiedCount,
+  };
+}
+
+export async function googleLoginUser({ idToken, userAgent, ipAddress }) {
+  // Verify Google's signed ID token.
+  const googleProfile = await verifyGoogleIdToken(idToken);
+
+  const { providerSubject, email, name } = googleProfile;
+
+  // The Google subject is the permanent identity key.
+  let authIdentity = await AuthIdentity.findOne({
+    provider: "google",
+    providerSubject,
+  });
+
+  // If this Google account has never been linked, create a new user.
+  if (!authIdentity) {
+    // Never automatically link Google to an existing account by email.
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      throw createServiceError(
+        409,
+        "GOOGLE_ACCOUNT_LINK_REQUIRED",
+        "An account with this email already exists. Sign in using your existing method before linking Google.",
+      );
+    }
+
+    const dbSession = await mongoose.startSession();
+
+    try {
+      await dbSession.withTransaction(async () => {
+        const now = new Date();
+
+        // Google has confirmed this email address.
+        const [newUser] = await User.create(
+          [
+            {
+              name: name.slice(0, 100),
+              email,
+              emailVerifiedAt: now,
+            },
+          ],
+          { session: dbSession },
+        );
+
+        const [newIdentity] = await AuthIdentity.create(
+          [
+            {
+              user: newUser._id,
+              provider: "google",
+              providerSubject,
+              email,
+              verifiedAt: now,
+              lastUsedAt: now,
+              status: "active",
+            },
+          ],
+          { session: dbSession },
+        );
+
+        authIdentity = newIdentity;
+      });
+    } catch (error) {
+      // Handle concurrent Google sign-ins or an account
+      // registered with the same email during this transaction.
+      if (error.code === 11000) {
+        authIdentity = await AuthIdentity.findOne({
+          provider: "google",
+          providerSubject,
+        });
+
+        if (!authIdentity) {
+          const emailOwner = await User.findOne({ email });
+
+          if (emailOwner) {
+            throw createServiceError(
+              409,
+              "GOOGLE_ACCOUNT_LINK_REQUIRED",
+              "An account with this email already exists. Sign in using your existing method before linking Google.",
+            );
+          }
+
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    } finally {
+      await dbSession.endSession();
+    }
+  }
+
+  // Make sure the Google identity is still active.
+  if (authIdentity.status !== "active") {
+    throw createServiceError(
+      403,
+      "GOOGLE_IDENTITY_DISABLED",
+      "This Google sign-in method is disabled.",
+    );
+  }
+
+  // Load the account linked to this Google identity.
+  const user = await User.findById(authIdentity.user);
+
+  if (!user || user.status !== "active") {
+    throw createServiceError(
+      403,
+      "ACCOUNT_DISABLED",
+      "Your account is disabled.",
+    );
+  }
+
+  // Record successful use of this identity.
+  await AuthIdentity.updateOne(
+    { _id: authIdentity._id },
+    { $set: { lastUsedAt: new Date() } },
+  );
+
+  // Create a refresh session using the existing auth system.
+  const refreshToken = generateRefreshToken();
+  const tokenHash = hashRefreshToken(refreshToken);
+  const familyId = crypto.randomUUID();
+
+  const expiresAt = new Date(
+    Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  const session = await RefreshSession.create({
+    user: user._id,
+    tokenHash,
+    familyId,
+    expiresAt,
+    userAgent,
+    ipAddress,
+  });
+
+  const accessToken = generateAccessToken({
+    sub: user._id.toString(),
+    sid: session._id.toString(),
+  });
+
+  return {
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt,
+    },
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
   };
 }

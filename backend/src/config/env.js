@@ -14,6 +14,8 @@ const FRONTEND_URL = (
   process.env.FRONTEND_URL || "http://localhost:5173"
 ).trim();
 
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim();
+
 // Optional email configuration.
 const EMAIL_HOST = process.env.EMAIL_HOST?.trim() || "";
 const EMAIL_PORT = Number(process.env.EMAIL_PORT || 465);
@@ -46,6 +48,10 @@ if (!JWT_EXPIRES_IN) {
 
 if (!Number.isInteger(REFRESH_TOKEN_TTL_DAYS) || REFRESH_TOKEN_TTL_DAYS <= 0) {
   throw new Error("REFRESH_TOKEN_TTL_DAYS must be a positive integer.");
+}
+
+if (!GOOGLE_CLIENT_ID) {
+  throw new Error("GOOGLE_CLIENT_ID is required. Check your .env file.");
 }
 
 if (
@@ -87,6 +93,7 @@ export const env = Object.freeze({
   JWT_EXPIRES_IN,
   REFRESH_TOKEN_TTL_DAYS,
   FRONTEND_URL,
+  GOOGLE_CLIENT_ID,
 
   EMAIL_HOST,
   EMAIL_PORT,

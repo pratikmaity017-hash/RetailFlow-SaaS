@@ -58,3 +58,12 @@ export const verifyEmailSchema = z
       .regex(/^[A-Za-z0-9_-]{43}$/, "Invalid verification token"),
   })
   .strict();
+
+export const googleLoginSchema = z
+  .object({
+    idToken: z
+      .string()
+      .min(1, "Google ID token is required")
+      .max(8192, "Google ID token is too large"),
+  })
+  .strict();
