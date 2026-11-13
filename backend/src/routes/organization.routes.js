@@ -10,11 +10,14 @@ import {
   createOrganizationController,
   getUserOrganizationsController,
   updateOrganizationCategoriesController,
+  getOrganizationProfileController,
+  updateOrganizationProfileController,
 } from "../controllers/organization.controller.js";
 
 import {
   createOrganizationSchema,
   updateOrganizationCategoriesSchema,
+  updateOrganizationProfileSchema,
 } from "../validators/organization.validator.js";
 
 const router = Router();
@@ -80,6 +83,26 @@ router.patch(
   authorize("owner", "manager"),
   validate(updateOrganizationCategoriesSchema),
   updateOrganizationCategoriesController,
+);
+
+// Get organization profile.
+router.get(
+  "/:organizationId/profile",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getOrganizationProfileController,
+);
+
+// Update organization profile.
+router.patch(
+  "/:organizationId/profile",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validate(updateOrganizationProfileSchema),
+  updateOrganizationProfileController,
 );
 
 export default router;

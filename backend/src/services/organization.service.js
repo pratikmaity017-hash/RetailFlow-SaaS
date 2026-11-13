@@ -174,3 +174,101 @@ export async function updateOrganizationCategories({
 
   return organization;
 }
+
+export async function getOrganizationProfile({ organizationId }) {
+  const organization = await Organization.findById(organizationId)
+    .select(
+      "name slug email phone address status primaryCategory additionalCategories",
+    )
+    .populate({
+      path: "primaryCategory",
+      select: "name slug description",
+    })
+    .populate({
+      path: "additionalCategories",
+      select: "name slug description",
+    })
+    .lean();
+
+  if (!organization) {
+    throw createServiceError(
+      404,
+      "ORGANIZATION_NOT_FOUND",
+      "Organization not found",
+    );
+  }
+
+  return organization;
+}
+
+export async function updateOrganizationProfile({
+  organizationId,
+  name,
+  email,
+  phone,
+  address,
+}) {
+  const updates = {};
+
+  // Add only fields that were provided.
+  if (name !== undefined) {
+    updates.name = name;
+  }
+
+  if (email !== undefined) {
+    updates.email = email;
+  }
+
+  if (phone !== undefined) {
+    updates.phone = phone;
+  }
+
+  // Update individual address fields to preserve existing values.
+  if (address !== undefined) {
+    const addressFields = Object.entries(address);
+
+    if (addressFields.length === 0) {
+      throw createServiceError(
+        400,
+        "EMPTY_ADDRESS",
+        "At least one address field must be provided",
+      );
+    }
+
+    for (const [field, value] of addressFields) {
+      updates[`address.${field}`] = value;
+    }
+  }
+
+  const organization = await Organization.findByIdAndUpdate(
+    organizationId,
+    {
+      $set: updates,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .select(
+      "name slug email phone address status primaryCategory additionalCategories",
+    )
+    .populate({
+      path: "primaryCategory",
+      select: "name slug description",
+    })
+    .populate({
+      path: "additionalCategories",
+      select: "name slug description",
+    });
+
+  if (!organization) {
+    throw createServiceError(
+      404,
+      "ORGANIZATION_NOT_FOUND",
+      "Organization not found",
+    );
+  }
+
+  return organization;
+}

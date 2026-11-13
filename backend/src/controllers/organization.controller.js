@@ -2,6 +2,8 @@ import {
   createOrganization,
   getUserOrganizations,
   updateOrganizationCategories,
+  getOrganizationProfile,
+  updateOrganizationProfile,
 } from "../services/organization.service.js";
 
 export async function createOrganizationController(req, res, next) {
@@ -57,6 +59,43 @@ export async function updateOrganizationCategoriesController(req, res, next) {
           primaryCategory: organization.primaryCategory,
           additionalCategories: organization.additionalCategories,
         },
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getOrganizationProfileController(req, res, next) {
+  try {
+    const organization = await getOrganizationProfile({
+      organizationId: req.organization.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization profile retrieved successfully",
+      data: {
+        organization,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateOrganizationProfileController(req, res, next) {
+  try {
+    const organization = await updateOrganizationProfile({
+      organizationId: req.organization.id,
+      ...req.body,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization profile updated successfully",
+      data: {
+        organization,
       },
     });
   } catch (error) {
