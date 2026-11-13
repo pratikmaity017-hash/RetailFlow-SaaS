@@ -1,4 +1,4 @@
-import { createSale, getSales, getSaleById } from "../services/sale.service.js";
+import { createSale, getSales, getSaleById ,cancelSale } from "../services/sale.service.js";
 
 export async function createSaleController(req, res, next) {
   try {
@@ -58,3 +58,25 @@ export async function getSaleByIdController(req, res, next) {
     return next(error);
   }
 }
+
+export const cancelSaleController = async (req, res, next) => {
+  try {
+    const result = await cancelSale({
+      organizationId: req.organization.id,
+      saleId: req.params.saleId,
+      userId: req.auth.userId,
+      reason: req.body.reason,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Sale cancelled successfully",
+      data: {
+        sale: result.sale,
+        restoredItems: result.restoredItems,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

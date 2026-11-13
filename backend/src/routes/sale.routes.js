@@ -6,12 +6,14 @@ import { authorize } from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 
-import { createSaleSchema } from "../validators/sale.validator.js";
+import { createSaleSchema ,  cancelSaleSchema} from "../validators/sale.validator.js";
 
 import {
   createSaleController,
   getSalesController,
   getSaleByIdController,
+cancelSaleController
+
 } from "../controllers/sale.controller.js";
 
 const router = Router({ mergeParams: true });
@@ -33,6 +35,16 @@ router.get(
   requireOrganization,
   authorize("owner", "manager", "sales_staff"),
   getSalesController,
+);
+
+router.patch(
+  "/:saleId/cancel",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner", "manager"),
+  validate(cancelSaleSchema),
+  cancelSaleController,
 );
 
 router.get(

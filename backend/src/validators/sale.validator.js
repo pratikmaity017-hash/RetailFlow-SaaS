@@ -40,3 +40,13 @@ export const createSaleSchema = z
       path: ["items"],
     },
   );
+
+export const cancelSaleSchema = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .min(3, "Cancellation reason must contain at least 3 characters")
+      .max(500, "Cancellation reason cannot exceed 500 characters"),
+  })
+  .strict();

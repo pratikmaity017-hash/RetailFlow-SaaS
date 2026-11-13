@@ -406,3 +406,177 @@ export async function getSaleById({ organizationId, saleId }) {
     items,
   };
 }
+
+export const cancelSale = async ({
+  organizationId,
+  saleId,
+  userId,
+  reason,
+}) => {
+  if (!mongoose.isValidObjectId(saleId)) {
+    throw createServiceError(400, "INVALID_SALE_ID", "Invalid sale ID");
+  }
+
+  const session = await mongoose.startSession();
+
+  let result;
+
+  try {
+    await session.withTransaction(async () => {
+      const sale = await Sale.findOne({
+        _id: saleId,
+        organization: organizationId,
+      }).session(session);
+
+      if (!sale) {
+        throw createServiceError(404, "SALE_NOT_FOUND", "Sale not found");
+      }
+
+      if (sale.status !== "completed") {
+        throw createServiceError(
+          400,
+          "SALE_ALREADY_CANCELLED",
+          "This sale has already been cancelled",
+        );
+      }
+
+      // Do not cancel a sale if any payment has been received.
+      // Refund handling will be implemented separately.
+      if (sale.amountPaidPaise > 0 || sale.paymentStatus !== "unpaid") {
+        throw createServiceError(
+          409,
+          "PAYMENT_REFUND_REQUIRED",
+          "This sale has received payments. Process a refund before cancelling it.",
+        );
+      }
+
+      const saleItems = await SaleItem.find({
+        organization: organizationId,
+        sale: sale._id,
+      }).session(session);
+
+      if (saleItems.length === 0) {
+        throw createServiceError(
+          409,
+          "SALE_ITEMS_NOT_FOUND",
+          "No sale items were found for this sale",
+        );
+      }
+
+      const restoredItems = [];
+
+      for (const item of saleItems) {
+        const inventory = await Inventory.findOne({
+          organization: organizationId,
+          variant: item.variant,
+        }).session(session);
+
+        if (!inventory) {
+          throw createServiceError(
+            409,
+            "INVENTORY_RECORD_NOT_FOUND",
+            "Inventory record not found for a sale item",
+          );
+        }
+
+        const quantity = Number(item.quantity);
+        const previousQuantity = Number(inventory.quantity);
+
+        const newQuantity = Number((previousQuantity + quantity).toFixed(3));
+
+        // Restore the sold quantity.
+        const inventoryUpdate = await Inventory.updateOne(
+          {
+            _id: inventory._id,
+            organization: organizationId,
+          },
+          {
+            $inc: {
+              quantity,
+            },
+            $set: {
+              updatedBy: userId,
+            },
+          },
+          { session },
+        );
+
+        if (inventoryUpdate.matchedCount !== 1) {
+          throw createServiceError(
+            409,
+            "INVENTORY_UPDATE_CONFLICT",
+            "Could not restore inventory for a sale item",
+          );
+        }
+
+        // Keep an audit trail of the restored stock.
+        await StockMovement.create(
+          [
+            {
+              organization: organizationId,
+              product: item.product,
+              variant: item.variant,
+              type: "stock_in",
+              quantity,
+              previousQuantity,
+              newQuantity,
+              reason: `Cancellation of sale ${sale._id}: ${reason}`,
+              performedBy: userId,
+            },
+          ],
+          { session },
+        );
+
+        restoredItems.push({
+          product: item.product,
+          variant: item.variant,
+          quantity,
+          previousQuantity,
+          newQuantity,
+        });
+      }
+
+      // Cancel the sale only if it is still completed and unpaid.
+      const cancellationUpdate = await Sale.updateOne(
+        {
+          _id: sale._id,
+          organization: organizationId,
+          status: "completed",
+          amountPaidPaise: 0,
+          paymentStatus: "unpaid",
+        },
+        {
+          $set: {
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelledBy: userId,
+            cancellationReason: reason,
+          },
+        },
+        { session },
+      );
+
+      if (cancellationUpdate.matchedCount !== 1) {
+        throw createServiceError(
+          409,
+          "SALE_CANCELLATION_CONFLICT",
+          "The sale could not be cancelled because its payment or status changed",
+        );
+      }
+
+      const updatedSale = await Sale.findOne({
+        _id: sale._id,
+        organization: organizationId,
+      }).session(session);
+
+      result = {
+        sale: updatedSale,
+        restoredItems,
+      };
+    });
+
+    return result;
+  } finally {
+    await session.endSession();
+  }
+};
