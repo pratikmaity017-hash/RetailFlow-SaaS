@@ -8,42 +8,59 @@ const stockMovementSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       required: true,
     },
+
     variant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ProductVariant",
       required: true,
     },
+
     type: {
       type: String,
       enum: ["stock_in", "stock_out", "adjustment"],
       required: true,
     },
+
     quantity: {
       type: Number,
       required: true,
-      min: 1,
+      min: 0.001,
+      validate: {
+        validator(value) {
+          return (
+            Number.isFinite(value) &&
+            Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+          );
+        },
+        message: "Quantity can have at most 3 decimal places",
+      },
     },
+
     previousQuantity: {
       type: Number,
       required: true,
       min: 0,
     },
+
     newQuantity: {
       type: Number,
       required: true,
       min: 0,
     },
+
     reason: {
       type: String,
       trim: true,
       maxlength: 500,
       required: true,
     },
+
     performedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
