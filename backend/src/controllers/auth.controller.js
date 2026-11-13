@@ -3,8 +3,13 @@ import {
   loginUser,
   refreshAccessToken,
   logoutUser,
-  logoutAllSessions
+  logoutAllSessions,
 } from "../services/auth.service.js";
+
+import {
+  requestEmailVerification,
+  verifyEmailVerificationToken,
+} from "../services/email-verification.service.js";
 
 export async function register(req, res, next) {
   try {
@@ -80,6 +85,37 @@ export async function logoutAll(req, res, next) {
       success: true,
       message: "Logged out from all devices successfully",
       data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function sendEmailVerificationController(req, res, next) {
+  try {
+    await requestEmailVerification({
+      userId: req.auth.userId,
+    });
+
+    return res.status(202).json({
+      success: true,
+      message:
+        "If your account has an unverified email address, a verification email will be sent.",
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyEmailController(req, res, next) {
+  try {
+    const result = await verifyEmailVerificationToken({
+      token: req.body.token,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (error) {
     next(error);

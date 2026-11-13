@@ -8,6 +8,8 @@ import authRoutes from "./routes/auth.route.js";
 import organizationRoutes from "./routes/organization.routes.js";
 import productRoutes from "./routes/product.routes.js";
 import productVariantRoutes from "./routes/product-variant.routes.js";
+import inventoryRoutes from "./routes/inventory.routes.js";
+import organizationInventoryRoutes from "./routes/organization-inventory.routes.js";
 
 const app = express();
 
@@ -38,6 +40,16 @@ app.use("/api/organizations/:organizationId/products", productRoutes);
 app.use(
   "/api/organizations/:organizationId/products/:productId/variants",
   productVariantRoutes,
+);
+
+app.use(
+  "/api/organizations/:organizationId/products/:productId/variants/:variantId/inventory",
+  inventoryRoutes,
+);
+
+app.use(
+  "/api/organizations/:organizationId/inventory",
+  organizationInventoryRoutes,
 );
 
 app.use(notFoundMiddleware);

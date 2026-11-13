@@ -7,6 +7,7 @@ import {
   authorizeVariantStatusChange,
 } from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
+import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 
 import {
   createProductVariantSchema,
@@ -24,9 +25,11 @@ import {
 const router = Router({ mergeParams: true });
 
 // Create a variant for a product.
+// Create a variant for a product.
 router.post(
   "/",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner", "manager"),
   validate(createProductVariantSchema),
@@ -34,10 +37,10 @@ router.post(
 );
 
 // Get all variants of a product.
-// Get all variants of a product.
 router.get(
   "/",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner", "manager", "sales_staff"),
   getProductVariantsController,
@@ -46,6 +49,7 @@ router.get(
 router.get(
   "/:variantId",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner", "manager", "sales_staff"),
   getProductVariantByIdController,
@@ -55,6 +59,7 @@ router.get(
 router.put(
   "/:variantId",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner", "manager"),
   validate(updateProductVariantSchema),
@@ -65,6 +70,7 @@ router.put(
 router.patch(
   "/:variantId/deactivate",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner"),
   deactivateProductVariantController,

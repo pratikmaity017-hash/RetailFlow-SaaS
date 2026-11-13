@@ -6,13 +6,20 @@ import {
   refresh,
   logout,
   logoutAll,
+  sendEmailVerificationController,
+  verifyEmailController,
 } from "../controllers/auth.controller.js";
+
 import { validate } from "../middlewares/validate.middleware.js";
+
 import {
   registerSchema,
   loginSchema,
   refreshTokenSchema,
+  sendEmailVerificationSchema,
+  verifyEmailSchema,
 } from "../validators/auth.validator.js";
+
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 
 const router = Router();
@@ -20,6 +27,20 @@ const router = Router();
 router.post("/register", validate(registerSchema), register);
 router.post("/login", validate(loginSchema), login);
 router.post("/refresh", validate(refreshTokenSchema), refresh);
+
+router.post(
+  "/email-verification/send",
+  authenticate,
+  validate(sendEmailVerificationSchema),
+  sendEmailVerificationController,
+);
+
+router.post(
+  "/email-verification/verify",
+  validate(verifyEmailSchema),
+  verifyEmailController,
+);
+
 router.get("/me", authenticate, (req, res) => {
   return res.status(200).json({
     success: true,

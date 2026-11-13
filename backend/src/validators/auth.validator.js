@@ -47,3 +47,14 @@ export const refreshTokenSchema = z
     refreshToken: z.string().min(1, "Refresh token is required"),
   })
   .strict();
+
+export const sendEmailVerificationSchema = z.object({}).strict();
+
+export const verifyEmailSchema = z
+  .object({
+    token: z
+      .string()
+      .length(43, "Invalid verification token")
+      .regex(/^[A-Za-z0-9_-]{43}$/, "Invalid verification token"),
+  })
+  .strict();

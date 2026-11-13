@@ -3,15 +3,23 @@ import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
 import { getUserOrganizationsController } from "../controllers/organization.controller.js";
+import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 
 const router = Router();
 
 // Get all active organizations belonging to the authenticated user.
-router.get("/", authenticate, getUserOrganizationsController);
+// Get all active organizations belonging to the authenticated user.
+router.get(
+  "/",
+  authenticate,
+  requireEmailVerified,
+  getUserOrganizationsController,
+);
 
 router.get(
   "/:organizationId/context",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   (req, res) => {
     return res.status(200).json({
@@ -28,6 +36,7 @@ router.get(
 router.get(
   "/:organizationId/owner-only",
   authenticate,
+  requireEmailVerified,
   requireOrganization,
   authorize("owner"),
   (req, res) => {
@@ -42,5 +51,4 @@ router.get(
     });
   },
 );
-
 export default router;

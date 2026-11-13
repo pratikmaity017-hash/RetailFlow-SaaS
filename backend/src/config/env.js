@@ -10,6 +10,17 @@ const MONGODB_URI = process.env.MONGODB_URI?.trim();
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN;
 const REFRESH_TOKEN_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS);
+const FRONTEND_URL = (
+  process.env.FRONTEND_URL || "http://localhost:5173"
+).trim();
+
+// Optional email configuration.
+const EMAIL_HOST = process.env.EMAIL_HOST?.trim() || "";
+const EMAIL_PORT = Number(process.env.EMAIL_PORT || 465);
+const EMAIL_SECURE_RAW = process.env.EMAIL_SECURE;
+const EMAIL_USER = process.env.EMAIL_USER?.trim() || "";
+const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD?.trim() || "";
+const EMAIL_FROM = process.env.EMAIL_FROM?.trim() || "";
 
 if (!allowedEnvironments.includes(NODE_ENV)) {
   throw new Error(
@@ -32,9 +43,41 @@ if (!JWT_SECRET || JWT_SECRET.length < 48) {
 if (!JWT_EXPIRES_IN) {
   throw new Error("JWT_EXPIRES_IN is required. Check your .env file.");
 }
+
 if (!Number.isInteger(REFRESH_TOKEN_TTL_DAYS) || REFRESH_TOKEN_TTL_DAYS <= 0) {
   throw new Error("REFRESH_TOKEN_TTL_DAYS must be a positive integer.");
 }
+
+if (
+  EMAIL_SECURE_RAW !== undefined &&
+  !["true", "false"].includes(EMAIL_SECURE_RAW.toLowerCase())
+) {
+  throw new Error("EMAIL_SECURE must be either true or false.");
+}
+
+const emailSettingsProvided = [
+  EMAIL_HOST,
+  EMAIL_USER,
+  EMAIL_APP_PASSWORD,
+  EMAIL_FROM,
+].some(Boolean);
+
+if (emailSettingsProvided) {
+  if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_APP_PASSWORD || !EMAIL_FROM) {
+    throw new Error(
+      "EMAIL_HOST, EMAIL_USER, EMAIL_APP_PASSWORD and EMAIL_FROM must all be configured.",
+    );
+  }
+
+  if (!Number.isInteger(EMAIL_PORT) || EMAIL_PORT < 1 || EMAIL_PORT > 65535) {
+    throw new Error("EMAIL_PORT must be a valid port number.");
+  }
+}
+
+const EMAIL_SECURE =
+  EMAIL_SECURE_RAW === undefined
+    ? true
+    : EMAIL_SECURE_RAW.toLowerCase() === "true";
 
 export const env = Object.freeze({
   NODE_ENV,
@@ -43,4 +86,13 @@ export const env = Object.freeze({
   JWT_SECRET,
   JWT_EXPIRES_IN,
   REFRESH_TOKEN_TTL_DAYS,
+  FRONTEND_URL,
+
+  EMAIL_HOST,
+  EMAIL_PORT,
+  EMAIL_SECURE,
+  EMAIL_USER,
+  EMAIL_APP_PASSWORD,
+  EMAIL_FROM,
+  EMAIL_CONFIGURED: emailSettingsProvided,
 });

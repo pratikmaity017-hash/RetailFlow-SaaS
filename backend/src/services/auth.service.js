@@ -2,10 +2,12 @@ import mongoose from "mongoose";
 import crypto from "node:crypto";
 
 import User from "../models/user.model.js";
+import AuthIdentity from "../models/auth-identity.model.js";
 import Organization from "../models/organization.model.js";
 import Membership from "../models/membership.model.js";
 import RefreshSession from "../models/refresh-session.model.js";
 import { env } from "../config/env.js";
+import { sendEmailVerification } from "./email-verification.service.js";
 
 import { hashPassword, comparePassword } from "../utils/password.util.js";
 import {
@@ -33,8 +35,8 @@ function generateOrganizationSlug(name) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  const safeBaseSlug = baseSlug || "organization";
 
+  const safeBaseSlug = baseSlug || "organization";
   const uniqueSuffix = crypto.randomUUID().slice(0, 8);
 
   return `${safeBaseSlug}-${uniqueSuffix}`;
@@ -74,10 +76,11 @@ export async function registerUser({
   const session = await mongoose.startSession();
 
   let registeredData;
+  let verificationData;
 
   try {
     await session.withTransaction(async () => {
-      // 1. Create User
+      // 1. Create User.
       const [user] = await User.create(
         [
           {
@@ -89,7 +92,28 @@ export async function registerUser({
         { session },
       );
 
-      // 2. Create Organization
+      // 2. Create email authentication identity.
+      const [authIdentity] = await AuthIdentity.create(
+        [
+          {
+            user: user._id,
+            provider: "email",
+            providerSubject: normalizedEmail,
+            email: normalizedEmail,
+            passwordHash,
+            verifiedAt: user.emailVerifiedAt,
+          },
+        ],
+        { session },
+      );
+
+      // Preserve references for sending verification after commit.
+      verificationData = {
+        user,
+        authIdentity,
+      };
+
+      // 3. Create Organization.
       const [organization] = await Organization.create(
         [
           {
@@ -101,7 +125,7 @@ export async function registerUser({
         { session },
       );
 
-      // 3. Create Membership
+      // 4. Create Membership.
       const [membership] = await Membership.create(
         [
           {
@@ -134,10 +158,15 @@ export async function registerUser({
         },
       };
     });
-
-    return registeredData;
   } catch (error) {
-    if (error.code === 11000 && error.keyPattern?.email) {
+    // Handle duplicate email or AuthIdentity records.
+    const isDuplicateEmailIdentity =
+      error.code === 11000 &&
+      (error.keyPattern?.email ||
+        (error.keyPattern?.provider && error.keyPattern?.providerSubject) ||
+        error.keyValue?.providerSubject);
+
+    if (isDuplicateEmailIdentity) {
       throw createServiceError(
         409,
         "EMAIL_ALREADY_REGISTERED",
@@ -149,6 +178,21 @@ export async function registerUser({
   } finally {
     await session.endSession();
   }
+
+  // 5. Send verification email after successful transaction.
+  // Email delivery failure must not undo registration.
+  try {
+    await sendEmailVerification(verificationData);
+  } catch (error) {
+    console.error(
+      "Registration succeeded, but verification email could not be sent.",
+      {
+        code: error.code || "EMAIL_DELIVERY_ERROR",
+      },
+    );
+  }
+
+  return registeredData;
 }
 
 export async function loginUser({ email, password, userAgent, ipAddress }) {
