@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
+import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 import {
   authorize,
   authorizeProductStatusChange,
@@ -22,12 +23,12 @@ import {
 const router = Router({ mergeParams: true });
 
 // Create a product: Owner and Manager only
-// Create a product: Owner and Manager only
 router.post(
   "/",
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager"),
   validate(createProductSchema),
   createProductController,
@@ -39,6 +40,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager", "sales_staff"),
   getProductsController,
 );
@@ -49,6 +51,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager", "sales_staff"),
   getProductByIdController,
 );
@@ -59,6 +62,7 @@ router.put(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager"),
   validate(updateProductSchema),
   authorizeProductStatusChange,
@@ -71,6 +75,7 @@ router.delete(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner"),
   deactivateProductController,
 );
