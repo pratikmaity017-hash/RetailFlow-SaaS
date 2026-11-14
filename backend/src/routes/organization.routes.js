@@ -72,6 +72,10 @@ import {
 
 import { getSubscriptionPaymentHistoryController } from "../controllers/subscription-payment-history.controller.js";
 import { subscriptionPaymentHistoryQuerySchema } from "../validators/subscription-payment-history.validator.js";
+import {
+  cancelOrganizationSubscriptionController,
+  resumeOrganizationSubscriptionController,
+} from "../controllers/subscription-cancellation.controller.js";
 
 const router = Router();
 
@@ -328,6 +332,28 @@ router.post(
   validateParams(subscriptionPaymentParamsSchema),
   validate(recoverSubscriptionPaymentSchema),
   recoverSubscriptionPaymentController,
+);
+
+// Schedule subscription cancellation at the end of the current period.
+router.post(
+  "/:organizationId/subscription/cancel",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionCheckoutParamsSchema),
+  cancelOrganizationSubscriptionController,
+);
+
+// Reverse a scheduled subscription cancellation.
+router.post(
+  "/:organizationId/subscription/resume",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionCheckoutParamsSchema),
+  resumeOrganizationSubscriptionController,
 );
 
 export default router;

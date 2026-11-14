@@ -385,11 +385,79 @@ export async function processCapturedPaymentFromWebhook({
     );
   }
 
+  // A renewal checkout abandoned during subscription cancellation
+  // must never reactivate or extend the subscription.
+  const wasCancelledRenewal =
+    billingPayment.paymentType === "renewal" &&
+    (billingPayment.status === "cancellation_pending" ||
+      (billingPayment.status === "failed" &&
+        billingPayment.failureReason ===
+          "RENEWAL_CHECKOUT_ABANDONED_BY_SUBSCRIPTION_CANCELLATION") ||
+      billingPayment.status === "refund_pending" ||
+      billingPayment.status === "refunded");
+
+  if (wasCancelledRenewal) {
+    if (
+      billingPayment.status === "refund_pending" ||
+      billingPayment.status === "refunded"
+    ) {
+      if (billingPayment.razorpayPaymentId !== paymentId) {
+        throw createServiceError(
+          "A different payment is already recorded for this cancelled order",
+          409,
+          "CANCELLED_ORDER_PAYMENT_MISMATCH",
+        );
+      }
+
+      return {
+        verified: true,
+        subscriptionActivated: false,
+        refundRequired: billingPayment.status !== "refunded",
+        refundStatus: billingPayment.status,
+        paymentId,
+      };
+    }
+
+    const updatedPayment = await BillingPayment.findOneAndUpdate(
+      {
+        _id: billingPayment._id,
+        status: billingPayment.status,
+        paymentType: "renewal",
+      },
+      {
+        $set: {
+          status: "refund_pending",
+          razorpayPaymentId: paymentId,
+          paidAt: new Date(),
+          refundStatus: "pending",
+        },
+      },
+      { new: true },
+    );
+
+    if (!updatedPayment) {
+      throw createServiceError(
+        "Cancelled renewal payment changed during processing",
+        409,
+        "CANCELLED_RENEWAL_PAYMENT_CONFLICT",
+      );
+    }
+
+    return {
+      verified: true,
+      subscriptionActivated: false,
+      refundRequired: true,
+      refundStatus: "pending",
+      paymentId,
+      billingPaymentId: updatedPayment._id,
+    };
+  }
+
   return activateSubscription({
     organizationId: billingPayment.organization,
     billingPayment,
     paymentId,
-  });
+  }); 
 }
 
 export async function processFailedPaymentFromWebhook({

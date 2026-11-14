@@ -43,6 +43,14 @@ export async function createSubscriptionRenewal({
     );
   }
 
+  if (subscription.cancelAtPeriodEnd) {
+    throw createServiceError(
+      "Subscription cancellation is already scheduled. Resume the subscription before renewing.",
+      409,
+      "SUBSCRIPTION_CANCELLATION_SCHEDULED",
+    );
+  }
+
   if (subscription.plan.code === "free") {
     throw createServiceError(
       "Free plan does not require renewal",

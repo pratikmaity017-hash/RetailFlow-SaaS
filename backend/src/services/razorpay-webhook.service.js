@@ -6,6 +6,10 @@ import {
 } from "./subscription-payment.service.js";
 
 import { fetchRazorpayOrderPayments } from "./razorpay.service.js";
+import {
+  processCancelledRenewalRefund,
+  processRefundWebhook,
+} from "./subscription-refund.service.js";
 
 function createServiceError(message, statusCode, code) {
   const error = new Error(message);
@@ -15,6 +19,17 @@ function createServiceError(message, statusCode, code) {
 }
 
 async function processPaymentEvent(eventType, payload) {
+  if (eventType === "refund.processed" || eventType === "refund.failed") {
+    const eventPayload = payload?.payload ?? payload;
+    const refund = eventPayload?.refund?.entity;
+
+    await processRefundWebhook({
+      eventType,
+      refund,
+    });
+
+    return;
+  }
   if (eventType === "payment.failed") {
     const eventPayload = payload?.payload ?? payload;
     const payment = eventPayload?.payment?.entity;
@@ -88,12 +103,18 @@ async function processPaymentEvent(eventType, payload) {
     );
   }
 
-  await processCapturedPaymentFromWebhook({
+  const result = await processCapturedPaymentFromWebhook({
     orderId: payment.order_id,
     paymentId: payment.id,
     amount: payment.amount,
     currency: payment.currency,
   });
+
+  if (result?.refundRequired && result.billingPaymentId) {
+    await processCancelledRenewalRefund({
+      billingPaymentId: result.billingPaymentId,
+    });
+  }
 }
 
 export async function processRazorpayWebhook({ eventId, eventType, payload }) {

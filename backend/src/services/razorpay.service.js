@@ -140,3 +140,94 @@ export async function fetchRazorpayOrderPayments(orderId) {
     captured: payment.captured,
   }));
 }
+
+export async function fetchRazorpayOrder(orderId) {
+  if (!orderId || typeof orderId !== "string") {
+    const error = new Error("Valid Razorpay order ID is required");
+    error.statusCode = 400;
+    error.code = "INVALID_RAZORPAY_ORDER_ID";
+    throw error;
+  }
+
+  const response = await fetch(
+    `${RAZORPAY_API_BASE_URL}/orders/${encodeURIComponent(orderId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: getRazorpayAuthorization(),
+      },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const error = new Error("Unable to retrieve Razorpay order");
+    error.statusCode = 502;
+    error.code = "RAZORPAY_ORDER_FETCH_FAILED";
+    throw error;
+  }
+
+  return {
+    id: result.id,
+    status: result.status,
+    attempts: result.attempts,
+    amount: result.amount,
+    amountPaid: result.amount_paid,
+    amountDue: result.amount_due,
+    currency: result.currency,
+  };
+}
+
+export async function createRazorpayRefund({
+  paymentId,
+  idempotencyKey,
+  notes = {},
+}) {
+  if (!paymentId || !idempotencyKey) {
+    const error = new Error(
+      "Payment ID and refund idempotency key are required",
+    );
+    error.statusCode = 400;
+    error.code = "INVALID_REFUND_REQUEST";
+    throw error;
+  }
+
+  const response = await fetch(
+    `${RAZORPAY_API_BASE_URL}/payments/${encodeURIComponent(paymentId)}/refund`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: getRazorpayAuthorization(),
+        "Content-Type": "application/json",
+        "X-Refund-Idempotency": idempotencyKey,
+      },
+      // No amount means full refund.
+      body: JSON.stringify({ notes }),
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Razorpay refund creation failed:", {
+      status: response.status,
+      code: result?.error?.code,
+    });
+
+    const error = new Error("Unable to create payment refund");
+    error.statusCode = 502;
+    error.code = "PAYMENT_REFUND_CREATION_FAILED";
+    throw error;
+  }
+
+  return {
+    id: result.id,
+    paymentId: result.payment_id,
+    amount: result.amount,
+    currency: result.currency,
+    status: result.status,
+  };
+}

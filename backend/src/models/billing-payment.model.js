@@ -56,7 +56,15 @@ const billingPaymentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "authorized", "captured", "failed", "refunded"],
+      enum: [
+        "pending",
+        "authorized",
+        "cancellation_pending",
+        "captured",
+        "failed",
+        "refund_pending",
+        "refunded",
+      ],
       default: "pending",
       required: true,
       index: true,
@@ -77,6 +85,23 @@ const billingPaymentSchema = new mongoose.Schema(
     razorpayPaymentId: {
       type: String,
       trim: true,
+    },
+
+    razorpayRefundId: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
+    refundStatus: {
+      type: String,
+      enum: ["pending", "processing", "processed", "failed"],
+      default: null,
+    },
+
+    refundProcessingAt: {
+      type: Date,
+      default: null,
     },
 
     failureReason: {
