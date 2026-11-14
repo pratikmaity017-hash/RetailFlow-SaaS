@@ -108,6 +108,7 @@ export async function createSubscriptionCheckout({
     organization: organizationId,
     subscription: subscription._id,
     plan: requestedPlan._id,
+    paymentType: "initial",
     amountPaise: selectedPrice.amountPaise,
     currency: selectedPrice.currency || "INR",
     billingInterval,

@@ -94,7 +94,23 @@ async function activateSubscription({
       }
 
       const now = new Date();
-      const periodEnd = calculatePeriodEnd(now, currentPayment.billingInterval);
+
+      const isRenewal = currentPayment.paymentType === "renewal";
+
+      let periodStart = now;
+
+      if (
+        isRenewal &&
+        subscription.currentPeriodEnd &&
+        subscription.currentPeriodEnd > now
+      ) {
+        periodStart = new Date(subscription.currentPeriodEnd);
+      }
+
+      const periodEnd = calculatePeriodEnd(
+        periodStart,
+        currentPayment.billingInterval,
+      );
 
       currentPayment.status = "captured";
       currentPayment.razorpayPaymentId = paymentId;
@@ -106,7 +122,7 @@ async function activateSubscription({
       subscription.plan = currentPayment.plan;
       subscription.status = "active";
       subscription.billingInterval = currentPayment.billingInterval;
-      subscription.currentPeriodStart = now;
+      subscription.currentPeriodStart = periodStart;
       subscription.currentPeriodEnd = periodEnd;
       subscription.nextBillingAt = periodEnd;
       subscription.gracePeriodEndsAt = null;
@@ -121,8 +137,9 @@ async function activateSubscription({
         alreadyVerified: false,
         paymentId: currentPayment._id,
         subscriptionId: subscription._id,
+        paymentType: currentPayment.paymentType || "initial",
         status: "captured",
-        currentPeriodStart: now,
+        currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
       };
     });

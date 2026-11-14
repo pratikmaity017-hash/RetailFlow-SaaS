@@ -22,6 +22,14 @@ const billingPaymentSchema = new mongoose.Schema(
       required: [true, "Subscription plan is required"],
     },
 
+    paymentType: {
+      type: String,
+      enum: ["initial", "renewal"],
+      default: "initial",
+      required: true,
+      index: true,
+    },
+
     amountPaise: {
       type: Number,
       required: [true, "Payment amount is required"],

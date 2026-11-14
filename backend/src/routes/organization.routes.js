@@ -6,6 +6,7 @@ import { authorize } from "../middlewares/authorize.middleware.js";
 import {
   validate,
   validateParams,
+  validateQuery,
 } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 
@@ -62,6 +63,15 @@ import {
   createSubscriptionCheckoutSchema,
   subscriptionCheckoutParamsSchema,
 } from "../validators/subscription-checkout.validator.js";
+import { createSubscriptionRenewalController } from "../controllers/subscription-renewal.controller.js";
+
+import {
+  createSubscriptionRenewalSchema,
+  subscriptionRenewalParamsSchema,
+} from "../validators/subscription-renewal.validator.js";
+
+import { getSubscriptionPaymentHistoryController } from "../controllers/subscription-payment-history.controller.js";
+import { subscriptionPaymentHistoryQuerySchema } from "../validators/subscription-payment-history.validator.js";
 
 const router = Router();
 
@@ -245,6 +255,16 @@ router.get(
   getAvailableSubscriptionPlansController,
 );
 
+// Get organization subscription payment history.
+router.get(
+  "/:organizationId/subscription/payments",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  validateQuery(subscriptionPaymentHistoryQuerySchema),
+  getSubscriptionPaymentHistoryController,
+);
+
 router.get(
   "/:organizationId/subscription/usage",
   authenticate,
@@ -274,6 +294,18 @@ router.post(
   validateParams(subscriptionCheckoutParamsSchema),
   validate(createSubscriptionCheckoutSchema),
   createSubscriptionCheckoutController,
+);
+
+// Create a Razorpay order for renewing an existing paid subscription.
+router.post(
+  "/:organizationId/subscription/renew",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionRenewalParamsSchema),
+  validate(createSubscriptionRenewalSchema),
+  createSubscriptionRenewalController,
 );
 
 router.post(
