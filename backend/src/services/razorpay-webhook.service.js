@@ -17,8 +17,12 @@ async function processPaymentEvent(eventType, payload) {
     return;
   }
 
-  let payment = payload?.payment?.entity;
-  const order = payload?.order?.entity;
+  // Razorpay sends payment/order entities inside payload.payload.
+  // The fallback also supports a directly nested payload structure.
+  const eventPayload = payload?.payload ?? payload;
+
+  let payment = eventPayload?.payment?.entity;
+  const order = eventPayload?.order?.entity;
 
   if (eventType === "order.paid" && !payment?.id) {
     const orderId = order?.id;
@@ -112,6 +116,7 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
     webhookEvent.status = "processing";
     webhookEvent.retryCount += 1;
     webhookEvent.failureReason = null;
+
     await webhookEvent.save();
   }
 
@@ -121,6 +126,7 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
     webhookEvent.status = "processed";
     webhookEvent.processedAt = new Date();
     webhookEvent.failureReason = null;
+
     await webhookEvent.save();
 
     return {
@@ -130,6 +136,7 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
   } catch (error) {
     webhookEvent.status = "failed";
     webhookEvent.failureReason = error.message;
+
     await webhookEvent.save();
 
     throw error;
