@@ -19,14 +19,14 @@ export function validate(schema) {
   };
 }
 
-export function validateParams(schema) {
+export function validateQuery(schema) {
   return (req, res, next) => {
-    const result = schema.safeParse(req.params);
+    const result = schema.safeParse(req.query);
 
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        message: "Validation failed",
+        message: "Query validation failed",
         errors: result.error.issues.map((issue) => ({
           field: issue.path.join("."),
           message: issue.message,
@@ -34,7 +34,27 @@ export function validateParams(schema) {
       });
     }
 
-    req.params = result.data;
+    req.validatedQuery = result.data;
+    next();
+  };
+}
+
+export function validateParams(schema, paramName) {
+  return (req, res, next) => {
+    const value = paramName ? req.params[paramName] : req.params;
+
+    const result = schema.safeParse(value);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Parameter validation failed",
+        errors: result.error.issues.map((issue) => ({
+          field: issue.path.join(".") || paramName || "params",
+          message: issue.message,
+        })),
+      });
+    }
 
     next();
   };

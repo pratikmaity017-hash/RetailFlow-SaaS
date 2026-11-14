@@ -14,6 +14,7 @@ import customerRoutes from "./routes/customer.routes.js";
 import saleRoutes from "./routes/sale.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import businessCategoryRoutes from "./routes/business-category.routes.js";
+import supplierRoutes from "./routes/supplier.routes.js";
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use(
 );
 
 app.use("/api/organizations/:organizationId/customers", customerRoutes);
+app.use("/api/organizations/:organizationId/suppliers", supplierRoutes);
 app.use("/api/organizations/:organizationId/sales", saleRoutes);
 app.use(
   "/api/organizations/:organizationId/sales/:saleId/payments",
