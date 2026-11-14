@@ -42,17 +42,57 @@ export async function createRazorpayOrder({
       }),
       signal: AbortSignal.timeout(15000),
     });
-  } catch (cause) {
-    const error = new Error(
-      "Razorpay order creation outcome is unknown. The request may have reached Razorpay.",
-    );
+  } catch (error) {
+    const outcomeUnknown = error.outcomeUnknown === true;
 
-    error.statusCode = 503;
-    error.code = "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN";
-    error.outcomeUnknown = true;
-    error.cause = cause;
+    await BillingPayment.updateOne(
+      {
+        _id: billingPayment._id,
+        status: "pending",
+        orderCreationStatus: "creating",
+      },
+      {
+        $set: {
+          orderCreationStatus: outcomeUnknown ? "unknown" : "failed",
+          ...(outcomeUnknown
+            ? {
+                failureReason: "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN",
+              }
+            : {
+                status: "failed",
+                failureReason: error.code || "PAYMENT_ORDER_CREATION_FAILED",
+              }),
+        },
+      },
+    ).catch((saveError) => {
+      console.error(
+        "Could not update renewal order creation state:",
+        saveError.message,
+      );
+    });
 
-    throw error;
+    if (!outcomeUnknown) {
+      throw error;
+    }
+
+    // The creation response was lost.
+    // Search Razorpay using the unique billing payment receipt.
+    try {
+      razorpayOrder = await findExistingRazorpayOrder(billingPayment);
+    } catch (reconciliationError) {
+      console.error(
+        "Razorpay order reconciliation failed:",
+        reconciliationError.message,
+      );
+
+      throw error;
+    }
+
+    if (!razorpayOrder) {
+      // Keep the payment in unknown state.
+      // A later retry can reconcile it using the same receipt.
+      throw error;
+    }
   }
 
   const result = await response.json().catch(() => null);
