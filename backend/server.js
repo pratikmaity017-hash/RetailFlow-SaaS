@@ -3,22 +3,23 @@ import { env } from "./src/config/env.js";
 import connectDB from "./src/config/database.js";
 import mongoose from "mongoose";
 
+let server;
+let isShuttingDown = false;
+
 async function startServer() {
   try {
     await connectDB();
 
-    app.listen(env.PORT, () => {
-      console.log(`sever is running on port ${env.PORT}`);
+    const PORT = Number(process.env.PORT) || env.PORT || 3000;
+
+    server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server is running on port ${PORT}`);
     });
   } catch (err) {
     console.error("Server startup failed:", err.message);
     process.exit(1);
   }
 }
-
-startServer();
-
-let isShuttingDown = false;
 
 const shutdown = async (signal) => {
   if (isShuttingDown) return;
@@ -27,20 +28,29 @@ const shutdown = async (signal) => {
 
   console.log(`${signal} received. Starting graceful shutdown...`);
 
-  server.close(async () => {
-    try {
-      await mongoose.disconnect();
-
-      console.log("MongoDB disconnected.");
-      console.log("Server shutdown complete.");
-
-      process.exit(0);
-    } catch (error) {
-      console.error("Error during shutdown:", error.message);
-      process.exit(1);
+  try {
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
     }
-  });
+
+    await mongoose.disconnect();
+
+    console.log("MongoDB disconnected.");
+    console.log("Server shutdown complete.");
+
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during shutdown:", error.message);
+    process.exit(1);
+  }
 };
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+startServer();
