@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --omit=dev
 
-      - name: Process subscription lifecycle (dry run)
-        run: node src/scripts/process-subscription-lifecycle.js --dry-run
+      - name: Process subscription lifecycle
+        run: node src/scripts/process-subscription-lifecycle.js
         env:
           NODE_ENV: production
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
