@@ -307,17 +307,17 @@ export async function recoverSubscriptionPayment({
 
   if (!savedOrderId) {
     throw createServiceError(
+      "No Razorpay order ID was saved for this payment. Do not create another order. This payment requires gateway reconciliation before it can be safely recovered.",
       409,
       "ORDER_CREATION_REQUIRES_MANUAL_RECONCILIATION",
-      "No Razorpay order ID was saved for this payment. Do not create another order. This payment requires gateway reconciliation before it can be safely recovered.",
     );
   }
 
   if (orderId && orderId !== savedOrderId) {
     throw createServiceError(
+      "The supplied order ID does not belong to this billing payment",
       400,
       "PAYMENT_ORDER_MISMATCH",
-      "The supplied order ID does not belong to this billing payment",
     );
   }
 
@@ -334,17 +334,17 @@ export async function recoverSubscriptionPayment({
 
   if (matchingPayments.length === 0) {
     throw createServiceError(
+      "No captured payment was found for this order",
       409,
       "CAPTURED_PAYMENT_NOT_FOUND",
-      "No captured payment was found for this order",
     );
   }
 
   if (matchingPayments.length > 1) {
     throw createServiceError(
+      "Multiple captured payments were found. Manual review is required",
       409,
       "MULTIPLE_CAPTURED_PAYMENTS",
-      "Multiple captured payments were found. Manual review is required",
     );
   }
 
