@@ -314,3 +314,63 @@ export async function recoverSubscriptionPayment({ organizationId, orderId }) {
     paymentId: capturedPayment.id,
   });
 }
+
+export async function processCapturedPaymentFromWebhook({
+  orderId,
+  paymentId,
+  amount,
+  currency,
+}) {
+  if (!orderId || !paymentId) {
+    throw createServiceError(
+      "Webhook payment details are incomplete",
+      400,
+      "WEBHOOK_PAYMENT_DETAILS_INVALID",
+    );
+  }
+
+  const billingPayment = await BillingPayment.findOne({
+    razorpayOrderId: orderId,
+  });
+
+  if (!billingPayment) {
+    throw createServiceError(
+      "Billing payment for this Razorpay order was not found",
+      404,
+      "BILLING_PAYMENT_NOT_FOUND",
+    );
+  }
+
+  if (
+    amount !== billingPayment.amountPaise ||
+    currency !== billingPayment.currency
+  ) {
+    throw createServiceError(
+      "Webhook payment amount or currency does not match",
+      400,
+      "WEBHOOK_PAYMENT_AMOUNT_MISMATCH",
+    );
+  }
+
+  const razorpayPayment = await fetchRazorpayPayment(paymentId);
+
+  if (
+    razorpayPayment.orderId !== orderId ||
+    razorpayPayment.amount !== billingPayment.amountPaise ||
+    razorpayPayment.currency !== billingPayment.currency ||
+    razorpayPayment.status !== "captured" ||
+    razorpayPayment.captured !== true
+  ) {
+    throw createServiceError(
+      "Razorpay payment could not be verified as captured",
+      400,
+      "WEBHOOK_PAYMENT_VERIFICATION_FAILED",
+    );
+  }
+
+  return activateSubscription({
+    organizationId: billingPayment.organization,
+    billingPayment,
+    paymentId,
+  });
+}

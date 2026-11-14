@@ -15,6 +15,7 @@ import saleRoutes from "./routes/sale.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import businessCategoryRoutes from "./routes/business-category.routes.js";
 import supplierRoutes from "./routes/supplier.routes.js";
+import razorpayWebhookRoute from "./routes/razorpay-webhook.routes.js";
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,7 +52,15 @@ app.use(
   }),
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buffer) => {
+      if (req.originalUrl.startsWith("/api/webhooks/razorpay")) {
+        req.rawBody = Buffer.from(buffer);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.use(healthRoute);
@@ -81,6 +90,8 @@ app.use(
   "/api/organizations/:organizationId/sales/:saleId/payments",
   paymentRoutes,
 );
+
+app.use("/api/webhooks/razorpay", razorpayWebhookRoute);
 
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
