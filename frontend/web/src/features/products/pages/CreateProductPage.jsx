@@ -6,6 +6,8 @@ import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./create-product.css";
 
+const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
+
 export default function CreateProductPage() {
   const navigate = useNavigate();
 
@@ -38,9 +40,27 @@ export default function CreateProductPage() {
 
         setOrganizations(availableOrganizations);
 
-        if (availableOrganizations.length === 1) {
-          setSelectedOrganizationId(availableOrganizations[0].organization.id);
+        if (availableOrganizations.length === 0) {
+          setSelectedOrganizationId("");
+          localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+          return;
         }
+
+        const savedOrganizationId = localStorage.getItem(
+          ORGANIZATION_STORAGE_KEY,
+        );
+
+        const savedOrganizationExists = availableOrganizations.some(
+          (item) => item.organization.id === savedOrganizationId,
+        );
+
+        const organizationId = savedOrganizationExists
+          ? savedOrganizationId
+          : availableOrganizations[0].organization.id;
+
+        setSelectedOrganizationId(organizationId);
+
+        localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
       } catch (err) {
         if (isMounted) {
           setError(
@@ -178,7 +198,19 @@ export default function CreateProductPage() {
                   id="organizationId"
                   value={selectedOrganizationId}
                   onChange={(event) => {
-                    setSelectedOrganizationId(event.target.value);
+                    const organizationId = event.target.value;
+
+                    setSelectedOrganizationId(organizationId);
+
+                    if (organizationId) {
+                      localStorage.setItem(
+                        ORGANIZATION_STORAGE_KEY,
+                        organizationId,
+                      );
+                    } else {
+                      localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+                    }
+
                     setError("");
                     setSuccess("");
                   }}

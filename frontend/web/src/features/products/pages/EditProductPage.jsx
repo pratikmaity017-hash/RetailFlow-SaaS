@@ -6,6 +6,8 @@ import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./edit-product.css";
 
+const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
+
 const initialFormData = {
   name: "",
   description: "",
@@ -82,7 +84,7 @@ export default function EditProductPage() {
         const product = match.products.find((item) => item._id === productId);
 
         setSelectedOrganizationId(match.organizationId);
-
+        localStorage.setItem(ORGANIZATION_STORAGE_KEY, match.organizationId);
         setFormData({
           name: product.name || "",
           description: product.description || "",

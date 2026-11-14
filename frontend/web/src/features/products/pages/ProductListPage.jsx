@@ -10,6 +10,8 @@ import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./product-list.css";
 
+const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
+
 export default function ProductListPage() {
   const navigate = useNavigate();
 
@@ -23,6 +25,7 @@ export default function ProductListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [actionError, setActionError] = useState("");
   const [deactivatingProductId, setDeactivatingProductId] = useState("");
 
@@ -39,9 +42,27 @@ export default function ProductListPage() {
 
         setOrganizations(availableOrganizations);
 
-        if (availableOrganizations.length === 1) {
-          setSelectedOrganizationId(availableOrganizations[0].organization.id);
+        if (availableOrganizations.length === 0) {
+          setSelectedOrganizationId("");
+          localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+          return;
         }
+
+        const savedOrganizationId = localStorage.getItem(
+          ORGANIZATION_STORAGE_KEY,
+        );
+
+        const savedOrganizationExists = availableOrganizations.some(
+          (item) => item.organization.id === savedOrganizationId,
+        );
+
+        const organizationId = savedOrganizationExists
+          ? savedOrganizationId
+          : availableOrganizations[0].organization.id;
+
+        setSelectedOrganizationId(organizationId);
+
+        localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
       } catch (err) {
         if (isMounted) {
           setError(err.message || "Unable to load organizations.");
@@ -69,6 +90,8 @@ export default function ProductListPage() {
     async function loadProducts() {
       try {
         setIsProductsLoading(true);
+        setProducts([]);
+        setActionError("");
         setError("");
 
         const response = await getProducts(selectedOrganizationId);
@@ -234,7 +257,19 @@ export default function ProductListPage() {
           <select
             id="product-organization"
             value={selectedOrganizationId}
-            onChange={(event) => setSelectedOrganizationId(event.target.value)}
+            onChange={(event) => {
+              const organizationId = event.target.value;
+
+              setSelectedOrganizationId(organizationId);
+
+              if (organizationId) {
+                localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
+              } else {
+                localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+              }
+              setError("");
+              setSuccess("");
+            }}
           >
             <option value="">Choose an organization</option>
 

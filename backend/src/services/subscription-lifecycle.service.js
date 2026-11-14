@@ -11,13 +11,29 @@ function calculateGracePeriodEnd(currentPeriodEnd) {
   );
 }
 
-function getConcurrencyFilter(subscription) {
+function getAvailableLockFilter(lockCheckTime) {
+  return {
+    $or: [
+      {
+        "billingOperationLock.token": null,
+      },
+      {
+        "billingOperationLock.expiresAt": {
+          $lte: lockCheckTime,
+        },
+      },
+    ],
+  };
+}
+
+function getConcurrencyFilter(subscription, lockCheckTime) {
   return {
     _id: subscription._id,
     status: subscription.status,
     currentPeriodEnd: subscription.currentPeriodEnd,
     gracePeriodEndsAt: subscription.gracePeriodEndsAt,
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    ...getAvailableLockFilter(lockCheckTime),
   };
 }
 
@@ -25,6 +41,7 @@ async function moveSubscriptionToFreePlan({
   subscription,
   freePlanId,
   now,
+  lockCheckTime,
   dryRun,
 }) {
   if (dryRun) {
@@ -32,7 +49,7 @@ async function moveSubscriptionToFreePlan({
   }
 
   const result = await Subscription.updateOne(
-    getConcurrencyFilter(subscription),
+    getConcurrencyFilter(subscription, lockCheckTime),
     {
       $set: {
         plan: freePlanId,
@@ -62,6 +79,10 @@ export async function processSubscriptionLifecycle({
     throw new Error("INVALID_LIFECYCLE_DATE");
   }
 
+  // Always use actual system time for billing lock checks.
+  // The supplied `now` is only for subscription lifecycle simulation.
+  const lockCheckTime = new Date();
+
   const freePlan = await SubscriptionPlan.findOne({
     code: "free",
     isActive: true,
@@ -78,36 +99,46 @@ export async function processSubscriptionLifecycle({
   );
 
   const subscriptions = await Subscription.find({
-    plan: { $ne: freePlan._id },
+    plan: {
+      $ne: freePlan._id,
+    },
 
-    $or: [
+    $and: [
+      getAvailableLockFilter(lockCheckTime),
+
       {
-        status: "active",
-        currentPeriodEnd: {
-          $ne: null,
-          $lte: currentTime,
-        },
-      },
-      {
-        status: "past_due",
         $or: [
           {
-            gracePeriodEndsAt: {
+            status: "active",
+            currentPeriodEnd: {
+              $ne: null,
               $lte: currentTime,
             },
           },
           {
-            gracePeriodEndsAt: null,
-            currentPeriodEnd: {
-              $lte: graceCutoff,
-            },
+            status: "past_due",
+            $or: [
+              {
+                gracePeriodEndsAt: {
+                  $lte: currentTime,
+                },
+              },
+              {
+                gracePeriodEndsAt: null,
+                currentPeriodEnd: {
+                  $lte: graceCutoff,
+                },
+              },
+            ],
           },
         ],
       },
     ],
   })
     .select("_id status currentPeriodEnd gracePeriodEndsAt cancelAtPeriodEnd")
-    .sort({ currentPeriodEnd: 1 })
+    .sort({
+      currentPeriodEnd: 1,
+    })
     .limit(BATCH_LIMIT)
     .lean();
 
@@ -133,6 +164,7 @@ export async function processSubscriptionLifecycle({
           subscription,
           freePlanId: freePlan._id,
           now: currentTime,
+          lockCheckTime,
           dryRun,
         });
 
@@ -152,7 +184,7 @@ export async function processSubscriptionLifecycle({
 
       const result = await Subscription.updateOne(
         {
-          ...getConcurrencyFilter(subscription),
+          ...getConcurrencyFilter(subscription, lockCheckTime),
           status: "active",
           cancelAtPeriodEnd: false,
         },
@@ -187,6 +219,7 @@ export async function processSubscriptionLifecycle({
         subscription,
         freePlanId: freePlan._id,
         now: currentTime,
+        lockCheckTime,
         dryRun,
       });
 

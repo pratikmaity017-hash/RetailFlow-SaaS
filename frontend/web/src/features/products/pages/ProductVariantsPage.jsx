@@ -14,6 +14,8 @@ import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./product-variants.css";
 
+const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
+
 export default function ProductVariantsPage() {
   const navigate = useNavigate();
   const { productId } = useParams();
@@ -73,8 +75,24 @@ export default function ProductVariantsPage() {
 
         setOrganizations(availableOrganizations);
 
-        if (availableOrganizations.length === 1) {
-          setSelectedOrganizationId(availableOrganizations[0].organization.id);
+        const savedOrganizationId = localStorage.getItem(
+          ORGANIZATION_STORAGE_KEY,
+        );
+
+        const savedOrganizationExists = availableOrganizations.some(
+          (item) => item.organization.id === savedOrganizationId,
+        );
+
+        const organizationId = savedOrganizationExists
+          ? savedOrganizationId
+          : availableOrganizations[0]?.organization.id || "";
+
+        setSelectedOrganizationId(organizationId);
+
+        if (organizationId) {
+          localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
+        } else {
+          localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
         }
       } catch (err) {
         if (isMounted) {
@@ -494,26 +512,6 @@ export default function ProductVariantsPage() {
           Back to Products
         </button>
       </header>
-
-      {organizations.length > 1 && (
-        <section className="variant-organization">
-          <label htmlFor="variant-organization">Select organization</label>
-
-          <select
-            id="variant-organization"
-            value={selectedOrganizationId}
-            onChange={(event) => setSelectedOrganizationId(event.target.value)}
-          >
-            <option value="">Choose an organization</option>
-
-            {organizations.map((item) => (
-              <option key={item.organization.id} value={item.organization.id}>
-                {item.organization.name}
-              </option>
-            ))}
-          </select>
-        </section>
-      )}
 
       {organizations.length === 0 && (
         <div className="variant-alert">

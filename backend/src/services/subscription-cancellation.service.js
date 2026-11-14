@@ -10,6 +10,7 @@ import {
 
 import {
   acquireSubscriptionOperationLock,
+  startSubscriptionOperationLockHeartbeat,
   releaseSubscriptionOperationLock,
 } from "../utils/subscription-operation-lock.util.js";
 
@@ -22,11 +23,15 @@ export async function cancelOrganizationSubscription({ organizationId }) {
     operation: "cancellation",
   });
 
+  const heartbeat = startSubscriptionOperationLockHeartbeat(lock);
+
   try {
     const subscription = await Subscription.findOne({
       _id: lock.subscriptionId,
       organization: organizationId,
     }).populate("plan", "code name");
+
+    await heartbeat.assertOwnership();
 
     if (!subscription) {
       throw createServiceError(
@@ -71,7 +76,6 @@ export async function cancelOrganizationSubscription({ organizationId }) {
       };
     }
 
-    // Find unresolved renewal payments, including crash-recovery state.
     const pendingRenewal = await BillingPayment.findOne({
       organization: organizationId,
       paymentType: "renewal",
@@ -79,6 +83,8 @@ export async function cancelOrganizationSubscription({ organizationId }) {
         $in: ["pending", "authorized", "cancellation_pending"],
       },
     });
+
+    await heartbeat.assertOwnership();
 
     if (pendingRenewal) {
       if (
@@ -92,8 +98,6 @@ export async function cancelOrganizationSubscription({ organizationId }) {
         );
       }
 
-      // Reserve a pending payment. A previous cancellation_pending
-      // payment is treated as a recoverable operation.
       if (pendingRenewal.status === "pending") {
         const reservedPayment = await BillingPayment.findOneAndUpdate(
           {
@@ -105,7 +109,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
               status: "cancellation_pending",
             },
           },
-          { new: true },
+          {
+            returnDocument: "after",
+          },
         );
 
         if (!reservedPayment) {
@@ -120,10 +126,14 @@ export async function cancelOrganizationSubscription({ organizationId }) {
       let safeToAbandon = false;
 
       try {
+        await heartbeat.assertOwnership();
+
         const [order, payments] = await Promise.all([
           fetchRazorpayOrder(pendingRenewal.razorpayOrderId),
           fetchRazorpayOrderPayments(pendingRenewal.razorpayOrderId),
         ]);
+
+        await heartbeat.assertOwnership();
 
         safeToAbandon =
           order.status === "created" &&
@@ -137,7 +147,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
             status: "cancellation_pending",
           },
           {
-            $set: { status: "pending" },
+            $set: {
+              status: "pending",
+            },
           },
         );
 
@@ -151,7 +163,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
             status: "cancellation_pending",
           },
           {
-            $set: { status: "pending" },
+            $set: {
+              status: "pending",
+            },
           },
         );
 
@@ -161,6 +175,8 @@ export async function cancelOrganizationSubscription({ organizationId }) {
           "A payment attempt exists for the renewal order. Resolve it before cancellation",
         );
       }
+
+      await heartbeat.assertOwnership();
 
       const abandonedPayment = await BillingPayment.findOneAndUpdate(
         {
@@ -173,7 +189,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
             failureReason: CANCELLATION_FAILURE_REASON,
           },
         },
-        { new: true },
+        {
+          returnDocument: "after",
+        },
       );
 
       if (!abandonedPayment) {
@@ -185,6 +203,8 @@ export async function cancelOrganizationSubscription({ organizationId }) {
       }
     }
 
+    await heartbeat.assertOwnership();
+
     const canceledAt = new Date();
 
     const updatedSubscription = await Subscription.findOneAndUpdate(
@@ -192,7 +212,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
         _id: subscription._id,
         status: "active",
         cancelAtPeriodEnd: false,
-        currentPeriodEnd: { $gt: canceledAt },
+        currentPeriodEnd: {
+          $gt: canceledAt,
+        },
       },
       {
         $set: {
@@ -200,7 +222,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
           canceledAt,
         },
       },
-      { new: true },
+      {
+        returnDocument: "after",
+      },
     );
 
     if (!updatedSubscription) {
@@ -218,40 +242,61 @@ export async function cancelOrganizationSubscription({ organizationId }) {
       alreadyCancelled: false,
     };
   } finally {
+    heartbeat.stop();
     await releaseSubscriptionOperationLock(lock);
   }
 }
 
 export async function resumeOrganizationSubscription({ organizationId }) {
-  const now = new Date();
+  // Resume and cancellation use the same lock to prevent concurrent changes.
+  const lock = await acquireSubscriptionOperationLock({
+    organizationId,
+    operation: "cancellation",
+  });
 
-  const updatedSubscription = await Subscription.findOneAndUpdate(
-    {
-      organization: organizationId,
-      status: "active",
-      cancelAtPeriodEnd: true,
-      currentPeriodEnd: { $gt: now },
-    },
-    {
-      $set: {
-        cancelAtPeriodEnd: false,
-        canceledAt: null,
+  const heartbeat = startSubscriptionOperationLockHeartbeat(lock);
+
+  try {
+    await heartbeat.assertOwnership();
+
+    const now = new Date();
+
+    const updatedSubscription = await Subscription.findOneAndUpdate(
+      {
+        _id: lock.subscriptionId,
+        organization: organizationId,
+        status: "active",
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: {
+          $gt: now,
+        },
       },
-    },
-    { new: true },
-  );
-
-  if (!updatedSubscription) {
-    throw createServiceError(
-      409,
-      "SUBSCRIPTION_CANCELLATION_NOT_REVERSIBLE",
-      "Cancellation cannot be reversed. The subscription may already have ended",
+      {
+        $set: {
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+        },
+      },
+      {
+        returnDocument: "after",
+      },
     );
-  }
 
-  return {
-    cancelAtPeriodEnd: updatedSubscription.cancelAtPeriodEnd,
-    canceledAt: updatedSubscription.canceledAt,
-    currentPeriodEnd: updatedSubscription.currentPeriodEnd,
-  };
+    if (!updatedSubscription) {
+      throw createServiceError(
+        409,
+        "SUBSCRIPTION_CANCELLATION_NOT_REVERSIBLE",
+        "Cancellation cannot be reversed. The subscription may already have ended",
+      );
+    }
+
+    return {
+      cancelAtPeriodEnd: updatedSubscription.cancelAtPeriodEnd,
+      canceledAt: updatedSubscription.canceledAt,
+      currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+    };
+  } finally {
+    heartbeat.stop();
+    await releaseSubscriptionOperationLock(lock);
+  }
 }

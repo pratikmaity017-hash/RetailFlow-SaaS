@@ -6,6 +6,7 @@ import { createRazorpayOrder } from "./razorpay.service.js";
 
 import {
   acquireSubscriptionOperationLock,
+  startSubscriptionOperationLockHeartbeat,
   releaseSubscriptionOperationLock,
 } from "../utils/subscription-operation-lock.util.js";
 
@@ -33,11 +34,15 @@ export async function createSubscriptionRenewal({
     operation: "renewal",
   });
 
+  const heartbeat = startSubscriptionOperationLockHeartbeat(lock);
+
   try {
     const subscription = await Subscription.findOne({
       _id: lock.subscriptionId,
       organization: organizationId,
     }).populate("plan", "code name isActive prices");
+
+    await heartbeat.assertOwnership();
 
     if (!subscription) {
       throw createServiceError(
@@ -116,6 +121,8 @@ export async function createSubscriptionRenewal({
       },
     }).select("_id");
 
+    await heartbeat.assertOwnership();
+
     if (existingPendingPayment) {
       throw createServiceError(
         "A payment is already pending for this organization",
@@ -137,6 +144,8 @@ export async function createSubscriptionRenewal({
     });
 
     try {
+      await heartbeat.assertOwnership();
+
       const razorpayOrder = await createRazorpayOrder({
         amountPaise: billingPayment.amountPaise,
         currency: billingPayment.currency,
@@ -149,6 +158,8 @@ export async function createSubscriptionRenewal({
           paymentType: "renewal",
         },
       });
+
+      await heartbeat.assertOwnership();
 
       billingPayment.razorpayOrderId = razorpayOrder.id;
       await billingPayment.save();
@@ -186,6 +197,7 @@ export async function createSubscriptionRenewal({
       throw error;
     }
   } finally {
+    heartbeat.stop();
     await releaseSubscriptionOperationLock(lock);
   }
 }
