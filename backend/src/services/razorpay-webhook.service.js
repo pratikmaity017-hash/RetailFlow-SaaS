@@ -1,6 +1,9 @@
 import WebhookEvent from "../models/webhook-event.model.js";
 
-import { processCapturedPaymentFromWebhook } from "./subscription-payment.service.js";
+import {
+  processCapturedPaymentFromWebhook,
+  processFailedPaymentFromWebhook,
+} from "./subscription-payment.service.js";
 
 import { fetchRazorpayOrderPayments } from "./razorpay.service.js";
 
@@ -13,7 +16,24 @@ function createServiceError(message, statusCode, code) {
 
 async function processPaymentEvent(eventType, payload) {
   if (eventType === "payment.failed") {
-    // A failed attempt does not necessarily mean the entire order failed.
+    const eventPayload = payload?.payload ?? payload;
+    const payment = eventPayload?.payment?.entity;
+
+    if (!payment?.id || !payment?.order_id) {
+      throw createServiceError(
+        "Failed webhook payment details are missing",
+        400,
+        "WEBHOOK_FAILED_PAYMENT_DETAILS_MISSING",
+      );
+    }
+
+    await processFailedPaymentFromWebhook({
+      orderId: payment.order_id,
+      paymentId: payment.id,
+      amount: payment.amount,
+      currency: payment.currency,
+    });
+
     return;
   }
 

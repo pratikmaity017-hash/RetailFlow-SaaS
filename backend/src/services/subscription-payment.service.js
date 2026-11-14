@@ -374,3 +374,73 @@ export async function processCapturedPaymentFromWebhook({
     paymentId,
   });
 }
+
+export async function processFailedPaymentFromWebhook({
+  orderId,
+  paymentId,
+  amount,
+  currency,
+}) {
+  if (!orderId || !paymentId) {
+    throw createServiceError(
+      "Webhook failed payment details are incomplete",
+      400,
+      "WEBHOOK_PAYMENT_DETAILS_INVALID",
+    );
+  }
+
+  const billingPayment = await BillingPayment.findOne({
+    razorpayOrderId: orderId,
+  });
+
+  if (!billingPayment) {
+    throw createServiceError(
+      "Billing payment for this Razorpay order was not found",
+      404,
+      "BILLING_PAYMENT_NOT_FOUND",
+    );
+  }
+
+  if (billingPayment.status === "captured") {
+    return {
+      verified: false,
+      ignored: true,
+      reason: "BILLING_PAYMENT_ALREADY_CAPTURED",
+    };
+  }
+
+  if (
+    amount !== billingPayment.amountPaise ||
+    currency !== billingPayment.currency
+  ) {
+    throw createServiceError(
+      "Failed payment amount or currency does not match",
+      400,
+      "WEBHOOK_PAYMENT_AMOUNT_MISMATCH",
+    );
+  }
+
+  const razorpayPayment = await fetchRazorpayPayment(paymentId);
+
+  if (
+    razorpayPayment.orderId !== orderId ||
+    razorpayPayment.amount !== billingPayment.amountPaise ||
+    razorpayPayment.currency !== billingPayment.currency ||
+    razorpayPayment.status !== "failed" ||
+    razorpayPayment.captured === true
+  ) {
+    throw createServiceError(
+      "Razorpay payment could not be verified as failed",
+      400,
+      "WEBHOOK_FAILED_PAYMENT_VERIFICATION_FAILED",
+    );
+  }
+
+  return {
+    verified: true,
+    paymentId,
+    orderId,
+    status: "failed",
+    billingPaymentId: billingPayment._id,
+  };
+}
