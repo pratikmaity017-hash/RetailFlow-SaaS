@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 import BillingPayment from "../models/billing-payment.model.js";
 import Subscription from "../models/subscription.model.js";
 
@@ -94,7 +96,7 @@ export async function cancelOrganizationSubscription({ organizationId }) {
         throw createServiceError(
           409,
           "RENEWAL_PAYMENT_REQUIRES_REVIEW",
-          "An existing renewal payment must be resolved before cancellation",
+          "An existing renewal payment must be resolved before cancellation. Its Razorpay order is not safely identifiable.",
         );
       }
 
@@ -175,64 +177,74 @@ export async function cancelOrganizationSubscription({ organizationId }) {
           "A payment attempt exists for the renewal order. Resolve it before cancellation",
         );
       }
-
-      await heartbeat.assertOwnership();
-
-      const abandonedPayment = await BillingPayment.findOneAndUpdate(
-        {
-          _id: pendingRenewal._id,
-          status: "cancellation_pending",
-        },
-        {
-          $set: {
-            status: "failed",
-            failureReason: CANCELLATION_FAILURE_REASON,
-          },
-        },
-        {
-          returnDocument: "after",
-        },
-      );
-
-      if (!abandonedPayment) {
-        throw createServiceError(
-          409,
-          "RENEWAL_PAYMENT_STATE_CHANGED",
-          "Renewal payment changed. Please refresh and try again",
-        );
-      }
     }
 
     await heartbeat.assertOwnership();
 
     const canceledAt = new Date();
+    const session = await mongoose.startSession();
 
-    const updatedSubscription = await Subscription.findOneAndUpdate(
-      {
-        _id: subscription._id,
-        status: "active",
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: {
-          $gt: canceledAt,
-        },
-      },
-      {
-        $set: {
-          cancelAtPeriodEnd: true,
-          canceledAt,
-        },
-      },
-      {
-        returnDocument: "after",
-      },
-    );
+    let updatedSubscription;
 
-    if (!updatedSubscription) {
-      throw createServiceError(
-        409,
-        "SUBSCRIPTION_CANCELLATION_CONFLICT",
-        "Subscription changed. Please refresh and try again",
-      );
+    try {
+      await session.withTransaction(async () => {
+        // Verify that the subscription has not changed since it was read.
+        const currentSubscription = await Subscription.findOne({
+          _id: subscription._id,
+          organization: organizationId,
+          status: "active",
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+        }).session(session);
+
+        if (!currentSubscription) {
+          throw createServiceError(
+            409,
+            "SUBSCRIPTION_CANCELLATION_CONFLICT",
+            "Subscription changed. Please refresh and try again",
+          );
+        }
+
+        // Only finalize abandonment in the same transaction that
+        // schedules subscription cancellation.
+        if (pendingRenewal) {
+          const abandonedPayment = await BillingPayment.findOneAndUpdate(
+            {
+              _id: pendingRenewal._id,
+              organization: organizationId,
+              status: "cancellation_pending",
+              paymentType: "renewal",
+            },
+            {
+              $set: {
+                status: "failed",
+                failureReason: CANCELLATION_FAILURE_REASON,
+              },
+            },
+            {
+              returnDocument: "after",
+              session,
+            },
+          );
+
+          if (!abandonedPayment) {
+            throw createServiceError(
+              409,
+              "RENEWAL_PAYMENT_STATE_CHANGED",
+              "Renewal payment changed. Cancellation was not completed",
+            );
+          }
+        }
+
+        currentSubscription.cancelAtPeriodEnd = true;
+        currentSubscription.canceledAt = canceledAt;
+
+        await currentSubscription.save({ session });
+
+        updatedSubscription = currentSubscription;
+      });
+    } finally {
+      await session.endSession();
     }
 
     return {

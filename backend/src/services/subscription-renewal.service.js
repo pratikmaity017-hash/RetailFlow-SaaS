@@ -117,7 +117,12 @@ export async function createSubscriptionRenewal({
     const existingPendingPayment = await BillingPayment.findOne({
       organization: organizationId,
       status: {
-        $in: ["pending", "authorized", "cancellation_pending"],
+        $in: [
+          "pending",
+          "authorized",
+          "cancellation_pending",
+          "refund_pending",
+        ],
       },
     }).select("_id");
 
@@ -131,22 +136,27 @@ export async function createSubscriptionRenewal({
       );
     }
 
-    const billingPayment = await BillingPayment.create({
-      organization: organizationId,
-      subscription: subscription._id,
-      plan: subscription.plan._id,
-      paymentType: "renewal",
-      amountPaise: selectedPrice.amountPaise,
-      currency: selectedPrice.currency || "INR",
-      billingInterval,
-      status: "pending",
-      gateway: "razorpay",
-    });
+    const [billingPayment] = await BillingPayment.create([
+      {
+        organization: organizationId,
+        subscription: subscription._id,
+        plan: subscription.plan._id,
+        paymentType: "renewal",
+        amountPaise: selectedPrice.amountPaise,
+        currency: selectedPrice.currency || "INR",
+        billingInterval,
+        status: "pending",
+        orderCreationStatus: "creating",
+        gateway: "razorpay",
+      },
+    ]);
+
+    let razorpayOrder;
 
     try {
       await heartbeat.assertOwnership();
 
-      const razorpayOrder = await createRazorpayOrder({
+      razorpayOrder = await createRazorpayOrder({
         amountPaise: billingPayment.amountPaise,
         currency: billingPayment.currency,
         receipt: billingPayment._id.toString(),
@@ -158,44 +168,112 @@ export async function createSubscriptionRenewal({
           paymentType: "renewal",
         },
       });
-
-      await heartbeat.assertOwnership();
-
-      billingPayment.razorpayOrderId = razorpayOrder.id;
-      await billingPayment.save();
-
-      return {
-        payment: {
-          id: billingPayment._id,
-          type: billingPayment.paymentType,
-          amountPaise: billingPayment.amountPaise,
-          currency: billingPayment.currency,
-          status: billingPayment.status,
-        },
-
-        checkout: {
-          keyId: env.RAZORPAY_KEY_ID,
-          orderId: razorpayOrder.id,
-          amount: razorpayOrder.amount,
-          currency: razorpayOrder.currency,
-
-          plan: {
-            code: subscription.plan.code,
-            name: subscription.plan.name,
-          },
-
-          billingInterval,
-          paymentType: "renewal",
-        },
-      };
     } catch (error) {
-      billingPayment.status = "failed";
-      billingPayment.failureReason = "Unable to create Razorpay renewal order";
+      const outcomeUnknown = error.outcomeUnknown === true;
 
-      await billingPayment.save().catch(() => {});
+      await BillingPayment.updateOne(
+        {
+          _id: billingPayment._id,
+          status: "pending",
+          orderCreationStatus: "creating",
+        },
+        {
+          $set: {
+            orderCreationStatus: outcomeUnknown ? "unknown" : "failed",
+            ...(outcomeUnknown
+              ? {
+                  failureReason: "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN",
+                }
+              : {
+                  status: "failed",
+                  failureReason: error.code || "PAYMENT_ORDER_CREATION_FAILED",
+                }),
+          },
+        },
+      ).catch((saveError) => {
+        console.error(
+          "Could not update renewal order creation state:",
+          saveError.message,
+        );
+      });
 
       throw error;
     }
+
+    // Persist the known order ID before checking lock ownership again.
+    // Even if the lock was lost, this order must remain recoverable.
+    try {
+      const savedPayment = await BillingPayment.findOneAndUpdate(
+        {
+          _id: billingPayment._id,
+          status: "pending",
+          orderCreationStatus: "creating",
+        },
+        {
+          $set: {
+            razorpayOrderId: razorpayOrder.id,
+            orderCreationStatus: "created",
+            failureReason: null,
+          },
+        },
+        {
+          returnDocument: "after",
+        },
+      );
+
+      if (!savedPayment) {
+        throw createServiceError(
+          "Renewal payment changed while saving the Razorpay order",
+          409,
+          "RENEWAL_PAYMENT_STATE_CHANGED",
+        );
+      }
+    } catch (error) {
+      // The order exists at Razorpay. Never mark it failed merely because
+      // saving its ID or checking lock ownership failed.
+      await BillingPayment.updateOne(
+        {
+          _id: billingPayment._id,
+          status: "pending",
+        },
+        {
+          $set: {
+            orderCreationStatus: "unknown",
+            failureReason:
+              "RAZORPAY_ORDER_CREATED_BUT_NOT_CONFIRMED_IN_DATABASE",
+          },
+        },
+      ).catch(() => {});
+
+      throw error;
+    }
+
+    await heartbeat.assertOwnership();
+
+    return {
+      payment: {
+        id: billingPayment._id,
+        type: billingPayment.paymentType,
+        amountPaise: billingPayment.amountPaise,
+        currency: billingPayment.currency,
+        status: billingPayment.status,
+      },
+
+      checkout: {
+        keyId: env.RAZORPAY_KEY_ID,
+        orderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+
+        plan: {
+          code: subscription.plan.code,
+          name: subscription.plan.name,
+        },
+
+        billingInterval,
+        paymentType: "renewal",
+      },
+    };
   } finally {
     heartbeat.stop();
     await releaseSubscriptionOperationLock(lock);

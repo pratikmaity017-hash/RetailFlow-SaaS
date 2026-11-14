@@ -255,23 +255,32 @@ export async function verifySubscriptionPayment({
   });
 }
 
-export async function recoverSubscriptionPayment({ organizationId, orderId }) {
-  if (!orderId) {
+export async function recoverSubscriptionPayment({
+  organizationId,
+  orderId,
+  billingPaymentId,
+}) {
+  if (!orderId && !billingPaymentId) {
     throw createServiceError(
-      "Razorpay order ID is required",
+      "Razorpay order ID or billing payment ID is required",
       400,
-      "ORDER_ID_REQUIRED",
+      "PAYMENT_RECOVERY_DETAILS_REQUIRED",
     );
   }
 
-  const billingPayment = await BillingPayment.findOne({
-    organization: organizationId,
-    razorpayOrderId: orderId,
-  });
+  const billingPayment = billingPaymentId
+    ? await BillingPayment.findOne({
+        _id: billingPaymentId,
+        organization: organizationId,
+      })
+    : await BillingPayment.findOne({
+        organization: organizationId,
+        razorpayOrderId: orderId,
+      });
 
   if (!billingPayment) {
     throw createServiceError(
-      "Payment order was not found",
+      "Payment record was not found",
       404,
       "BILLING_PAYMENT_NOT_FOUND",
     );
@@ -294,13 +303,29 @@ export async function recoverSubscriptionPayment({ organizationId, orderId }) {
     );
   }
 
-  // Retrieve payment history directly from Razorpay.
-  const razorpayPayments = await fetchRazorpayOrderPayments(orderId);
+  const savedOrderId = billingPayment.razorpayOrderId;
 
-  // Only captured payments matching the expected amount and currency qualify.
+  if (!savedOrderId) {
+    throw createServiceError(
+      409,
+      "ORDER_CREATION_REQUIRES_MANUAL_RECONCILIATION",
+      "No Razorpay order ID was saved for this payment. Do not create another order. This payment requires gateway reconciliation before it can be safely recovered.",
+    );
+  }
+
+  if (orderId && orderId !== savedOrderId) {
+    throw createServiceError(
+      400,
+      "PAYMENT_ORDER_MISMATCH",
+      "The supplied order ID does not belong to this billing payment",
+    );
+  }
+
+  const razorpayPayments = await fetchRazorpayOrderPayments(savedOrderId);
+
   const matchingPayments = razorpayPayments.filter(
     (payment) =>
-      payment.orderId === orderId &&
+      payment.orderId === savedOrderId &&
       payment.amount === billingPayment.amountPaise &&
       payment.currency === billingPayment.currency &&
       payment.status === "captured" &&
@@ -309,17 +334,17 @@ export async function recoverSubscriptionPayment({ organizationId, orderId }) {
 
   if (matchingPayments.length === 0) {
     throw createServiceError(
-      "No captured payment was found for this order",
       409,
       "CAPTURED_PAYMENT_NOT_FOUND",
+      "No captured payment was found for this order",
     );
   }
 
   if (matchingPayments.length > 1) {
     throw createServiceError(
-      "Multiple captured payments were found. Manual review is required",
       409,
       "MULTIPLE_CAPTURED_PAYMENTS",
+      "Multiple captured payments were found. Manual review is required",
     );
   }
 
@@ -385,16 +410,27 @@ export async function processCapturedPaymentFromWebhook({
     );
   }
 
-  // A renewal checkout abandoned during subscription cancellation
-  // must never reactivate or extend the subscription.
+  // Cancellation is not finalized while the payment is reserved.
+  // Fail this webhook delivery so Razorpay can retry after the
+  // cancellation transaction commits or restores the payment.
+  if (
+    billingPayment.paymentType === "renewal" &&
+    billingPayment.status === "cancellation_pending"
+  ) {
+    throw createServiceError(
+      "Renewal cancellation is still being finalized. Retry this webhook later.",
+      409,
+      "RENEWAL_CANCELLATION_IN_PROGRESS",
+    );
+  }
+
   const wasCancelledRenewal =
     billingPayment.paymentType === "renewal" &&
-    (billingPayment.status === "cancellation_pending" ||
+    (billingPayment.status === "refund_pending" ||
+      billingPayment.status === "refunded" ||
       (billingPayment.status === "failed" &&
         billingPayment.failureReason ===
-          "RENEWAL_CHECKOUT_ABANDONED_BY_SUBSCRIPTION_CANCELLATION") ||
-      billingPayment.status === "refund_pending" ||
-      billingPayment.status === "refunded");
+          "RENEWAL_CHECKOUT_ABANDONED_BY_SUBSCRIPTION_CANCELLATION"));
 
   if (wasCancelledRenewal) {
     if (
@@ -415,14 +451,17 @@ export async function processCapturedPaymentFromWebhook({
         refundRequired: billingPayment.status !== "refunded",
         refundStatus: billingPayment.status,
         paymentId,
+        billingPaymentId: billingPayment._id,
       };
     }
 
     const updatedPayment = await BillingPayment.findOneAndUpdate(
       {
         _id: billingPayment._id,
-        status: billingPayment.status,
+        status: "failed",
         paymentType: "renewal",
+        failureReason:
+          "RENEWAL_CHECKOUT_ABANDONED_BY_SUBSCRIPTION_CANCELLATION",
       },
       {
         $set: {
@@ -432,7 +471,9 @@ export async function processCapturedPaymentFromWebhook({
           refundStatus: "pending",
         },
       },
-      { new: true },
+      {
+        returnDocument: "after",
+      },
     );
 
     if (!updatedPayment) {
@@ -457,7 +498,7 @@ export async function processCapturedPaymentFromWebhook({
     organizationId: billingPayment.organization,
     billingPayment,
     paymentId,
-  }); 
+  });
 }
 
 export async function processFailedPaymentFromWebhook({

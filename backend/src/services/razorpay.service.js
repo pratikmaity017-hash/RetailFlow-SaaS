@@ -23,20 +23,35 @@ export async function createRazorpayOrder({
   receipt,
   notes = {},
 }) {
-  const response = await fetch(`${RAZORPAY_API_BASE_URL}/orders`, {
-    method: "POST",
-    headers: {
-      Authorization: getRazorpayAuthorization(),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      amount: amountPaise,
-      currency,
-      receipt,
-      notes,
-    }),
-    signal: AbortSignal.timeout(15000),
-  });
+  let response;
+
+  try {
+    response = await fetch(`${RAZORPAY_API_BASE_URL}/orders`, {
+      method: "POST",
+      headers: {
+        Authorization: getRazorpayAuthorization(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: amountPaise,
+        currency,
+        receipt,
+        notes,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (cause) {
+    const error = new Error(
+      "Razorpay order creation outcome is unknown. The request may have reached Razorpay.",
+    );
+
+    error.statusCode = 503;
+    error.code = "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN";
+    error.outcomeUnknown = true;
+    error.cause = cause;
+
+    throw error;
+  }
 
   const result = await response.json().catch(() => null);
 
@@ -46,9 +61,35 @@ export async function createRazorpayOrder({
       code: result?.error?.code,
     });
 
-    const error = new Error("Unable to create payment order");
+    const outcomeUnknown = response.status >= 500;
+
+    const error = new Error(
+      outcomeUnknown
+        ? "Razorpay order creation outcome is unknown"
+        : "Unable to create payment order",
+    );
+
+    error.statusCode = outcomeUnknown ? 503 : 502;
+    error.code = outcomeUnknown
+      ? "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN"
+      : "PAYMENT_ORDER_CREATION_FAILED";
+
+    error.outcomeUnknown = outcomeUnknown;
+
+    throw error;
+  }
+
+  if (
+    !result?.id ||
+    result.amount !== amountPaise ||
+    result.currency !== currency
+  ) {
+    const error = new Error("Razorpay returned an invalid order response");
+
     error.statusCode = 502;
-    error.code = "PAYMENT_ORDER_CREATION_FAILED";
+    error.code = "RAZORPAY_ORDER_RESPONSE_INVALID";
+    error.outcomeUnknown = true;
+
     throw error;
   }
 

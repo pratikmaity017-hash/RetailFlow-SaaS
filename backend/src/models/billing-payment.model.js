@@ -70,6 +70,14 @@ const billingPaymentSchema = new mongoose.Schema(
       index: true,
     },
 
+    orderCreationStatus: {
+      type: String,
+      enum: ["not_started", "creating", "created", "unknown", "failed"],
+      default: "not_started",
+      required: true,
+      index: true,
+    },
+
     gateway: {
       type: String,
       enum: ["razorpay"],

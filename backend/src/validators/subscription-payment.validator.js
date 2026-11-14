@@ -16,6 +16,13 @@ export const subscriptionPaymentParamsSchema = z
 
 export const recoverSubscriptionPaymentSchema = z
   .object({
-    orderId: z.string().trim().min(1).max(100),
+    orderId: z.string().trim().min(1).max(100).optional(),
+    billingPaymentId: z
+      .string()
+      .regex(/^[a-f\d]{24}$/i)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => Boolean(data.orderId || data.billingPaymentId), {
+    message: "Either orderId or billingPaymentId is required",
+  });

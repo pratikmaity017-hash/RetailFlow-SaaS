@@ -29,6 +29,7 @@ export async function recoverSubscriptionPaymentController(req, res, next) {
     const result = await recoverSubscriptionPayment({
       organizationId: req.organization.id,
       orderId: req.body.orderId,
+      billingPaymentId: req.body.billingPaymentId,
     });
 
     return res.status(200).json({
