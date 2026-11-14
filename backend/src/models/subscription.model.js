@@ -89,6 +89,22 @@ const subscriptionSchema = new mongoose.Schema(
       default: null,
     },
 
+    billingOperationLock: {
+      token: {
+        type: String,
+        default: null,
+      },
+      operation: {
+        type: String,
+        enum: ["renewal", "cancellation"],
+        default: null,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
     razorpayCustomerId: {
       type: String,
       trim: true,

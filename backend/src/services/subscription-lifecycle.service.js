@@ -11,6 +11,16 @@ function calculateGracePeriodEnd(currentPeriodEnd) {
   );
 }
 
+function getConcurrencyFilter(subscription) {
+  return {
+    _id: subscription._id,
+    status: subscription.status,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    gracePeriodEndsAt: subscription.gracePeriodEndsAt,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+  };
+}
+
 async function moveSubscriptionToFreePlan({
   subscription,
   freePlanId,
@@ -22,14 +32,7 @@ async function moveSubscriptionToFreePlan({
   }
 
   const result = await Subscription.updateOne(
-    {
-      _id: subscription._id,
-      status: subscription.status,
-      currentPeriodEnd: subscription.currentPeriodEnd,
-      ...(subscription.status === "past_due"
-        ? { gracePeriodEndsAt: subscription.gracePeriodEndsAt }
-        : {}),
-    },
+    getConcurrencyFilter(subscription),
     {
       $set: {
         plan: freePlanId,
@@ -53,6 +56,12 @@ export async function processSubscriptionLifecycle({
   now = new Date(),
   dryRun = false,
 } = {}) {
+  const currentTime = new Date(now);
+
+  if (Number.isNaN(currentTime.getTime())) {
+    throw new Error("INVALID_LIFECYCLE_DATE");
+  }
+
   const freePlan = await SubscriptionPlan.findOne({
     code: "free",
     isActive: true,
@@ -64,7 +73,9 @@ export async function processSubscriptionLifecycle({
     throw new Error("ACTIVE_FREE_PLAN_NOT_FOUND");
   }
 
-  const graceCutoff = new Date(now.getTime() - GRACE_PERIOD_DAYS * DAY_IN_MS);
+  const graceCutoff = new Date(
+    currentTime.getTime() - GRACE_PERIOD_DAYS * DAY_IN_MS,
+  );
 
   const subscriptions = await Subscription.find({
     plan: { $ne: freePlan._id },
@@ -74,7 +85,7 @@ export async function processSubscriptionLifecycle({
         status: "active",
         currentPeriodEnd: {
           $ne: null,
-          $lte: now,
+          $lte: currentTime,
         },
       },
       {
@@ -82,7 +93,7 @@ export async function processSubscriptionLifecycle({
         $or: [
           {
             gracePeriodEndsAt: {
-              $lte: now,
+              $lte: currentTime,
             },
           },
           {
@@ -115,13 +126,13 @@ export async function processSubscriptionLifecycle({
       );
 
       const shouldMoveToFree =
-        subscription.cancelAtPeriodEnd || gracePeriodEndsAt <= now;
+        subscription.cancelAtPeriodEnd || gracePeriodEndsAt <= currentTime;
 
       if (shouldMoveToFree) {
         const updated = await moveSubscriptionToFreePlan({
           subscription,
           freePlanId: freePlan._id,
-          now,
+          now: currentTime,
           dryRun,
         });
 
@@ -141,9 +152,9 @@ export async function processSubscriptionLifecycle({
 
       const result = await Subscription.updateOne(
         {
-          _id: subscription._id,
+          ...getConcurrencyFilter(subscription),
           status: "active",
-          currentPeriodEnd: subscription.currentPeriodEnd,
+          cancelAtPeriodEnd: false,
         },
         {
           $set: {
@@ -167,7 +178,7 @@ export async function processSubscriptionLifecycle({
         subscription.gracePeriodEndsAt ||
         calculateGracePeriodEnd(subscription.currentPeriodEnd);
 
-      if (gracePeriodEndsAt > now) {
+      if (gracePeriodEndsAt > currentTime) {
         summary.skipped += 1;
         continue;
       }
@@ -175,7 +186,7 @@ export async function processSubscriptionLifecycle({
       const updated = await moveSubscriptionToFreePlan({
         subscription,
         freePlanId: freePlan._id,
-        now,
+        now: currentTime,
         dryRun,
       });
 

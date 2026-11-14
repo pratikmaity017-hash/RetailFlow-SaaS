@@ -86,19 +86,28 @@ export function requireFeature(featureCode) {
         );
       }
 
-      // 6. Check subscription status and grace period.
-      const isActive = subscription.status === "active";
+      const now = new Date();
+
+      // 6. Check subscription status and actual billing period.
+      const isFreePlan = subscription.plan.code === "free";
+
+      const hasValidPaidPeriod =
+        subscription.currentPeriodEnd instanceof Date &&
+        subscription.currentPeriodEnd > now;
+
+      const isActive =
+        subscription.status === "active" && (isFreePlan || hasValidPaidPeriod);
 
       const isWithinGracePeriod =
         subscription.status === "past_due" &&
-        subscription.gracePeriodEndsAt &&
-        subscription.gracePeriodEndsAt > new Date();
+        subscription.gracePeriodEndsAt instanceof Date &&
+        subscription.gracePeriodEndsAt > now;
 
       if (!isActive && !isWithinGracePeriod) {
         throw createServiceError(
           403,
           "SUBSCRIPTION_INACTIVE",
-          "Your subscription is inactive or its grace period has ended",
+          "Your subscription is inactive or its billing period or grace period has ended",
         );
       }
 

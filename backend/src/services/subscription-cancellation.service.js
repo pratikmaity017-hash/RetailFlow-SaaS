@@ -8,198 +8,218 @@ import {
   fetchRazorpayOrderPayments,
 } from "./razorpay.service.js";
 
+import {
+  acquireSubscriptionOperationLock,
+  releaseSubscriptionOperationLock,
+} from "../utils/subscription-operation-lock.util.js";
+
 const CANCELLATION_FAILURE_REASON =
   "RENEWAL_CHECKOUT_ABANDONED_BY_SUBSCRIPTION_CANCELLATION";
 
 export async function cancelOrganizationSubscription({ organizationId }) {
-  const subscription = await Subscription.findOne({
-    organization: organizationId,
-  }).populate("plan", "code name");
-
-  if (!subscription) {
-    throw createServiceError(
-      404,
-      "SUBSCRIPTION_NOT_FOUND",
-      "Subscription not found",
-    );
-  }
-
-  if (subscription.plan?.code === "free") {
-    throw createServiceError(
-      400,
-      "FREE_PLAN_CANCELLATION_NOT_REQUIRED",
-      "Free plan does not require cancellation",
-    );
-  }
-
-  if (subscription.status !== "active" || !subscription.currentPeriodEnd) {
-    throw createServiceError(
-      409,
-      "SUBSCRIPTION_NOT_ACTIVE",
-      "Only an active paid subscription can be cancelled",
-    );
-  }
-
-  const now = new Date();
-
-  if (subscription.currentPeriodEnd <= now) {
-    throw createServiceError(
-      409,
-      "SUBSCRIPTION_PERIOD_ALREADY_ENDED",
-      "The current subscription period has already ended",
-    );
-  }
-
-  if (subscription.cancelAtPeriodEnd) {
-    return {
-      cancelAtPeriodEnd: true,
-      canceledAt: subscription.canceledAt,
-      currentPeriodEnd: subscription.currentPeriodEnd,
-      alreadyCancelled: true,
-    };
-  }
-
-  // Only unresolved renewal payments need special handling.
-  const pendingRenewal = await BillingPayment.findOne({
-    organization: organizationId,
-    paymentType: "renewal",
-    status: { $in: ["pending", "authorized"] },
+  const lock = await acquireSubscriptionOperationLock({
+    organizationId,
+    operation: "cancellation",
   });
 
-  if (pendingRenewal) {
-    if (
-      pendingRenewal.status !== "pending" ||
-      !pendingRenewal.razorpayOrderId
-    ) {
+  try {
+    const subscription = await Subscription.findOne({
+      _id: lock.subscriptionId,
+      organization: organizationId,
+    }).populate("plan", "code name");
+
+    if (!subscription) {
+      throw createServiceError(
+        404,
+        "SUBSCRIPTION_NOT_FOUND",
+        "Subscription not found",
+      );
+    }
+
+    if (subscription.plan?.code === "free") {
+      throw createServiceError(
+        400,
+        "FREE_PLAN_CANCELLATION_NOT_REQUIRED",
+        "Free plan does not require cancellation",
+      );
+    }
+
+    if (subscription.status !== "active" || !subscription.currentPeriodEnd) {
       throw createServiceError(
         409,
-        "RENEWAL_PAYMENT_REQUIRES_REVIEW",
-        "An existing renewal payment must be resolved before cancellation",
+        "SUBSCRIPTION_NOT_ACTIVE",
+        "Only an active paid subscription can be cancelled",
       );
     }
 
-    // Atomically reserve the payment while checking Razorpay.
-    const reservedPayment = await BillingPayment.findOneAndUpdate(
-      {
-        _id: pendingRenewal._id,
-        status: "pending",
-      },
-      {
-        $set: {
-          status: "cancellation_pending",
-        },
-      },
-      { new: true },
-    );
+    const now = new Date();
 
-    if (!reservedPayment) {
+    if (subscription.currentPeriodEnd <= now) {
       throw createServiceError(
         409,
-        "RENEWAL_PAYMENT_STATE_CHANGED",
-        "Renewal payment changed. Please refresh and try again",
+        "SUBSCRIPTION_PERIOD_ALREADY_ENDED",
+        "The current subscription period has already ended",
       );
     }
 
-    let safeToAbandon = false;
-
-    try {
-      const [order, payments] = await Promise.all([
-        fetchRazorpayOrder(pendingRenewal.razorpayOrderId),
-        fetchRazorpayOrderPayments(pendingRenewal.razorpayOrderId),
-      ]);
-
-      safeToAbandon =
-        order.status === "created" &&
-        order.attempts === 0 &&
-        order.amountPaid === 0 &&
-        payments.length === 0;
-    } catch (error) {
-      await BillingPayment.updateOne(
-        {
-          _id: pendingRenewal._id,
-          status: "cancellation_pending",
-        },
-        {
-          $set: { status: "pending" },
-        },
-      );
-
-      throw error;
-    }
-
-    if (!safeToAbandon) {
-      await BillingPayment.updateOne(
-        {
-          _id: pendingRenewal._id,
-          status: "cancellation_pending",
-        },
-        {
-          $set: { status: "pending" },
-        },
-      );
-
-      throw createServiceError(
-        409,
-        "RENEWAL_PAYMENT_REQUIRES_REVIEW",
-        "A payment attempt exists for the renewal order. Resolve it before cancellation",
-      );
-    }
-
-    const abandonedPayment = await BillingPayment.findOneAndUpdate(
-      {
-        _id: pendingRenewal._id,
-        status: "cancellation_pending",
-      },
-      {
-        $set: {
-          status: "failed",
-          failureReason: CANCELLATION_FAILURE_REASON,
-        },
-      },
-      { new: true },
-    );
-
-    if (!abandonedPayment) {
-      throw createServiceError(
-        409,
-        "RENEWAL_PAYMENT_STATE_CHANGED",
-        "Renewal payment changed. Please refresh and try again",
-      );
-    }
-  }
-
-  const canceledAt = new Date();
-
-  const updatedSubscription = await Subscription.findOneAndUpdate(
-    {
-      _id: subscription._id,
-      status: "active",
-      cancelAtPeriodEnd: false,
-      currentPeriodEnd: { $gt: canceledAt },
-    },
-    {
-      $set: {
+    if (subscription.cancelAtPeriodEnd) {
+      return {
         cancelAtPeriodEnd: true,
-        canceledAt,
+        canceledAt: subscription.canceledAt,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        alreadyCancelled: true,
+      };
+    }
+
+    // Find unresolved renewal payments, including crash-recovery state.
+    const pendingRenewal = await BillingPayment.findOne({
+      organization: organizationId,
+      paymentType: "renewal",
+      status: {
+        $in: ["pending", "authorized", "cancellation_pending"],
       },
-    },
-    { new: true },
-  );
+    });
 
-  if (!updatedSubscription) {
-    throw createServiceError(
-      409,
-      "SUBSCRIPTION_CANCELLATION_CONFLICT",
-      "Subscription changed. Please refresh and try again",
+    if (pendingRenewal) {
+      if (
+        pendingRenewal.status === "authorized" ||
+        !pendingRenewal.razorpayOrderId
+      ) {
+        throw createServiceError(
+          409,
+          "RENEWAL_PAYMENT_REQUIRES_REVIEW",
+          "An existing renewal payment must be resolved before cancellation",
+        );
+      }
+
+      // Reserve a pending payment. A previous cancellation_pending
+      // payment is treated as a recoverable operation.
+      if (pendingRenewal.status === "pending") {
+        const reservedPayment = await BillingPayment.findOneAndUpdate(
+          {
+            _id: pendingRenewal._id,
+            status: "pending",
+          },
+          {
+            $set: {
+              status: "cancellation_pending",
+            },
+          },
+          { new: true },
+        );
+
+        if (!reservedPayment) {
+          throw createServiceError(
+            409,
+            "RENEWAL_PAYMENT_STATE_CHANGED",
+            "Renewal payment changed. Please refresh and try again",
+          );
+        }
+      }
+
+      let safeToAbandon = false;
+
+      try {
+        const [order, payments] = await Promise.all([
+          fetchRazorpayOrder(pendingRenewal.razorpayOrderId),
+          fetchRazorpayOrderPayments(pendingRenewal.razorpayOrderId),
+        ]);
+
+        safeToAbandon =
+          order.status === "created" &&
+          order.attempts === 0 &&
+          order.amountPaid === 0 &&
+          payments.length === 0;
+      } catch (error) {
+        await BillingPayment.updateOne(
+          {
+            _id: pendingRenewal._id,
+            status: "cancellation_pending",
+          },
+          {
+            $set: { status: "pending" },
+          },
+        );
+
+        throw error;
+      }
+
+      if (!safeToAbandon) {
+        await BillingPayment.updateOne(
+          {
+            _id: pendingRenewal._id,
+            status: "cancellation_pending",
+          },
+          {
+            $set: { status: "pending" },
+          },
+        );
+
+        throw createServiceError(
+          409,
+          "RENEWAL_PAYMENT_REQUIRES_REVIEW",
+          "A payment attempt exists for the renewal order. Resolve it before cancellation",
+        );
+      }
+
+      const abandonedPayment = await BillingPayment.findOneAndUpdate(
+        {
+          _id: pendingRenewal._id,
+          status: "cancellation_pending",
+        },
+        {
+          $set: {
+            status: "failed",
+            failureReason: CANCELLATION_FAILURE_REASON,
+          },
+        },
+        { new: true },
+      );
+
+      if (!abandonedPayment) {
+        throw createServiceError(
+          409,
+          "RENEWAL_PAYMENT_STATE_CHANGED",
+          "Renewal payment changed. Please refresh and try again",
+        );
+      }
+    }
+
+    const canceledAt = new Date();
+
+    const updatedSubscription = await Subscription.findOneAndUpdate(
+      {
+        _id: subscription._id,
+        status: "active",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: { $gt: canceledAt },
+      },
+      {
+        $set: {
+          cancelAtPeriodEnd: true,
+          canceledAt,
+        },
+      },
+      { new: true },
     );
-  }
 
-  return {
-    cancelAtPeriodEnd: updatedSubscription.cancelAtPeriodEnd,
-    canceledAt: updatedSubscription.canceledAt,
-    currentPeriodEnd: updatedSubscription.currentPeriodEnd,
-    alreadyCancelled: false,
-  };
+    if (!updatedSubscription) {
+      throw createServiceError(
+        409,
+        "SUBSCRIPTION_CANCELLATION_CONFLICT",
+        "Subscription changed. Please refresh and try again",
+      );
+    }
+
+    return {
+      cancelAtPeriodEnd: updatedSubscription.cancelAtPeriodEnd,
+      canceledAt: updatedSubscription.canceledAt,
+      currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+      alreadyCancelled: false,
+    };
+  } finally {
+    await releaseSubscriptionOperationLock(lock);
+  }
 }
 
 export async function resumeOrganizationSubscription({ organizationId }) {
