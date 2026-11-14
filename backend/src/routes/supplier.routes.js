@@ -19,6 +19,8 @@ import {
   validateQuery,
   validateParams,
 } from "../middlewares/validate.middleware.js";
+
+import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 import {
   createSupplierSchema,
   listSuppliersQuerySchema,
@@ -36,6 +38,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("supplier_management"),
   authorize("owner", "manager", "sales_staff"),
   validateQuery(listSuppliersQuerySchema),
   listSuppliersController,
@@ -46,6 +49,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("supplier_management"),
   authorize("owner", "manager", "sales_staff"),
   validateSupplierId,
   getSupplierByIdController,
@@ -56,6 +60,7 @@ router.post(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("supplier_management"),
   authorize("owner", "manager"),
   validate(createSupplierSchema),
   createSupplierController,
@@ -66,6 +71,7 @@ router.patch(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("supplier_management"),
   authorize("owner", "manager"),
   validateSupplierId,
   authorizeSupplierStatusChange,
@@ -78,6 +84,7 @@ router.patch(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("supplier_management"),
   authorize("owner"),
   validateSupplierId,
   validate(updateSupplierStatusSchema),

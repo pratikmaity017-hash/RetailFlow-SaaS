@@ -8,6 +8,7 @@ import {
 } from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
+import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 
 import {
   createCustomerSchema,
@@ -30,6 +31,7 @@ router.post(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("customer_management"),
   authorize("owner", "manager"),
   validate(createCustomerSchema),
   createCustomerController,
@@ -41,6 +43,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("customer_management"),
   authorize("owner", "manager", "sales_staff"),
   getCustomersController,
 );
@@ -51,6 +54,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("customer_management"),
   authorize("owner", "manager", "sales_staff"),
   getCustomerByIdController,
 );
@@ -61,6 +65,7 @@ router.put(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("customer_management"),
   authorize("owner", "manager"),
   validate(updateCustomerSchema),
   authorizeCustomerStatusChange,
@@ -73,6 +78,7 @@ router.delete(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("customer_management"),
   authorize("owner"),
   deactivateCustomerController,
 );
