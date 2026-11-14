@@ -23,13 +23,15 @@ export async function createRazorpayOrder({
   receipt,
   notes = {},
 }) {
+  const authorization = getRazorpayAuthorization();
+
   let response;
 
   try {
     response = await fetch(`${RAZORPAY_API_BASE_URL}/orders`, {
       method: "POST",
       headers: {
-        Authorization: getRazorpayAuthorization(),
+        Authorization: authorization,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -271,4 +273,48 @@ export async function createRazorpayRefund({
     currency: result.currency,
     status: result.status,
   };
+}
+
+export async function fetchRazorpayOrdersByReceipt(receipt) {
+  if (!receipt || typeof receipt !== "string") {
+    const error = new Error("Valid Razorpay receipt is required");
+    error.statusCode = 400;
+    error.code = "INVALID_RAZORPAY_RECEIPT";
+    throw error;
+  }
+
+  const response = await fetch(
+    `${RAZORPAY_API_BASE_URL}/orders?receipt=${encodeURIComponent(receipt)}&count=100`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: getRazorpayAuthorization(),
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const error = new Error("Unable to search Razorpay orders by receipt");
+    error.statusCode = 502;
+    error.code = "RAZORPAY_ORDER_SEARCH_FAILED";
+    throw error;
+  }
+
+  return (result?.items || [])
+    .filter((order) => order.receipt === receipt)
+    .map((order) => ({
+      id: order.id,
+      receipt: order.receipt,
+      amount: order.amount,
+      currency: order.currency,
+      status: order.status,
+      attempts: order.attempts,
+      amountPaid: order.amount_paid,
+      amountDue: order.amount_due,
+      notes: order.notes,
+    }));
 }
