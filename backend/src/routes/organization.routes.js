@@ -25,6 +25,22 @@ import {
   revokeOrganizationInvitationController,
 } from "../controllers/organization.controller.js";
 
+import { getOrganizationSubscriptionController } from "../controllers/subscription.controller.js";
+import { getAvailableSubscriptionPlansController } from "../controllers/subscription-plan.controller.js";
+import { getOrganizationSubscriptionUsageController } from "../controllers/subscription-usage.controller.js";
+import { requestSubscriptionPlanChangeController } from "../controllers/subscription-change.controller.js";
+import { createSubscriptionCheckoutController } from "../controllers/subscription-checkout.controller.js";
+import {
+  verifySubscriptionPaymentController,
+  recoverSubscriptionPaymentController,
+} from "../controllers/subscription-payment.controller.js";
+
+import {
+  verifySubscriptionPaymentSchema,
+  subscriptionPaymentParamsSchema,
+  recoverSubscriptionPaymentSchema,
+} from "../validators/subscription-payment.validator.js";
+
 import {
   createOrganizationSchema,
   updateOrganizationCategoriesSchema,
@@ -37,6 +53,15 @@ import {
   acceptOrganizationInvitationSchema,
   organizationInvitationParamsSchema,
 } from "../validators/organization.validator.js";
+
+import {
+  requestSubscriptionPlanChangeSchema,
+  subscriptionChangeParamsSchema,
+} from "../validators/subscription-change.validator.js";
+import {
+  createSubscriptionCheckoutSchema,
+  subscriptionCheckoutParamsSchema,
+} from "../validators/subscription-checkout.validator.js";
 
 const router = Router();
 
@@ -203,4 +228,74 @@ router.delete(
   validateParams(organizationInvitationParamsSchema),
   revokeOrganizationInvitationController,
 );
+
+router.get(
+  "/:organizationId/subscription",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getOrganizationSubscriptionController,
+);
+
+router.get(
+  "/:organizationId/subscription/plans",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getAvailableSubscriptionPlansController,
+);
+
+router.get(
+  "/:organizationId/subscription/usage",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  getOrganizationSubscriptionUsageController,
+);
+
+router.post(
+  "/:organizationId/subscription/change",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionChangeParamsSchema),
+  validate(requestSubscriptionPlanChangeSchema),
+  requestSubscriptionPlanChangeController,
+);
+
+// Create a Razorpay checkout order for upgrading from Free to Paid.
+router.post(
+  "/:organizationId/subscription/checkout",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionCheckoutParamsSchema),
+  validate(createSubscriptionCheckoutSchema),
+  createSubscriptionCheckoutController,
+);
+
+router.post(
+  "/:organizationId/subscription/verify-payment",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionPaymentParamsSchema),
+  validate(verifySubscriptionPaymentSchema),
+  verifySubscriptionPaymentController,
+);
+
+router.post(
+  "/:organizationId/subscription/recover-payment",
+  authenticate,
+  requireEmailVerified,
+  requireOrganization,
+  authorize("owner"),
+  validateParams(subscriptionPaymentParamsSchema),
+  validate(recoverSubscriptionPaymentSchema),
+  recoverSubscriptionPaymentController,
+);
+
 export default router;

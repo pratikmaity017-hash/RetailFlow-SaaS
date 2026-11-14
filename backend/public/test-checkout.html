@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetailFlow - Test Checkout</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background: #f3f4f6;
+        padding: 24px;
+        margin: 0;
+      }
+
+      .container {
+        max-width: 480px;
+        margin: 40px auto;
+        background: white;
+        padding: 28px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px #00000012;
+      }
+
+      h2 {
+        margin-top: 0;
+      }
+
+      label {
+        display: block;
+        margin-top: 16px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        padding: 11px;
+        margin-top: 7px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+
+      button {
+        width: 100%;
+        padding: 13px;
+        margin-top: 24px;
+        border: 0;
+        border-radius: 6px;
+        background: #2563eb;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 18px;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .info {
+        background: #eff6ff;
+        color: #1e40af;
+      }
+      .success {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .error {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h2>RetailFlow Test Checkout</h2>
+      <p>Razorpay Test Mode payment verification.</p>
+
+      <label>Organization ID</label>
+      <input id="organizationId" placeholder="MongoDB Organization ID" />
+
+      <label>Owner Access Token</label>
+      <input
+        id="token"
+        type="password"
+        placeholder="Bearer token (without Bearer prefix)"
+      />
+
+      <label>Razorpay Key ID</label>
+      <input id="keyId" placeholder="rzp_test_..." />
+
+      <label>Razorpay Order ID</label>
+      <input id="orderId" placeholder="order_..." />
+
+      <label>Amount (Paise)</label>
+      <input id="amount" type="number" value="4900" />
+
+      <label>Currency</label>
+      <input id="currency" value="INR" />
+
+      <button id="payButton" onclick="startCheckout()">Pay ₹49</button>
+
+      <div id="status" class="info">Enter checkout details to begin.</div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function showStatus(message, type = "info") {
+        $("status").className = type;
+        $("status").textContent = message;
+      }
+
+      async function startCheckout() {
+        const organizationId = $("organizationId").value.trim();
+        const token = $("token").value.trim();
+        const keyId = $("keyId").value.trim();
+        const orderId = $("orderId").value.trim();
+        const amount = Number($("amount").value);
+        const currency = $("currency").value.trim();
+
+        if (!organizationId || !token || !keyId || !orderId) {
+          showStatus("Please fill in all required fields.", "error");
+          return;
+        }
+
+        if (!Number.isSafeInteger(amount) || amount <= 0) {
+          showStatus("Invalid payment amount.", "error");
+          return;
+        }
+
+        $("payButton").disabled = true;
+        showStatus("Opening Razorpay Checkout...");
+
+        const options = {
+          key: keyId,
+          amount,
+          currency,
+          name: "RetailFlow",
+          description: "Subscription Test Payment",
+          order_id: orderId,
+
+          handler: async function (response) {
+            showStatus("Payment received. Verifying with backend...");
+
+            try {
+              const result = await fetch(
+                `/api/organizations/${encodeURIComponent(organizationId)}/subscription/verify-payment`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    orderId: response.razorpay_order_id,
+                    paymentId: response.razorpay_payment_id,
+                    signature: response.razorpay_signature,
+                  }),
+                },
+              );
+
+              const data = await result.json();
+
+              if (!result.ok || !data.success) {
+                throw new Error(
+                  data.error?.message ||
+                    data.message ||
+                    "Payment verification failed.",
+                );
+              }
+
+              showStatus(
+                "Payment verified successfully!\n\n" +
+                  JSON.stringify(data, null, 2),
+                "success",
+              );
+            } catch (error) {
+              showStatus(
+                "Payment was received, but backend verification failed.\n\n" +
+                  error.message +
+                  "\n\nDo not pay again. Check the backend and payment status.",
+                "error",
+              );
+            } finally {
+              $("payButton").disabled = false;
+            }
+          },
+
+          modal: {
+            ondismiss: function () {
+              showStatus(
+                "Checkout closed. Payment verification was not submitted.",
+              );
+              $("payButton").disabled = false;
+            },
+          },
+
+          theme: {
+            color: "#2563eb",
+          },
+        };
+
+        try {
+          const checkout = new Razorpay(options);
+
+          checkout.on("payment.failed", function (response) {
+            showStatus(
+              "Payment failed: " +
+                (response.error?.description || "Unknown error"),
+              "error",
+            );
+            $("payButton").disabled = false;
+          });
+
+          checkout.open();
+        } catch (error) {
+          showStatus(error.message, "error");
+          $("payButton").disabled = false;
+        }
+      }
+    </script>
+  </body>
+</html>

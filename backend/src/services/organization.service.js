@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 
 import Organization from "../models/organization.model.js";
 import Membership from "../models/membership.model.js";
+import Subscription from "../models/subscription.model.js";
+import SubscriptionPlan from "../models/subscription-plan.model.js";
 
 import BusinessCategory from "../models/business-category.model.js";
 import { createServiceError } from "../utils/service-error.util.js";
@@ -44,7 +46,31 @@ export async function createOrganization({ userId, name }) {
         ],
         { session },
       );
+      const freePlan = await SubscriptionPlan.findOne({
+        code: "free",
+        isActive: true,
+      }).session(session);
 
+      if (!freePlan) {
+        throw createServiceError(
+          500,
+          "FREE_PLAN_UNAVAILABLE",
+          "Default Free subscription plan is not configured",
+        );
+      }
+
+      await Subscription.create(
+        [
+          {
+            organization: organization._id,
+            plan: freePlan._id,
+            status: "active",
+            billingInterval: "none",
+            currentPeriodStart: new Date(),
+          },
+        ],
+        { session },
+      );
       const [membership] = await Membership.create(
         [
           {

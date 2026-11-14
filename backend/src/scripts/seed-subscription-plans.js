@@ -43,6 +43,50 @@ const plans = [
     isActive: true,
     sortOrder: 1,
   },
+
+  {
+    code: "starter",
+    name: "Starter Test",
+    description: "Temporary paid plan for Razorpay test checkout.",
+
+    prices: {
+      monthly: {
+        amountPaise: 4900,
+        currency: "INR",
+      },
+      yearly: null,
+    },
+
+    // Same entitlements as Free for checkout testing.
+    // We will decide actual paid features and limits later.
+    entitlements: {
+      features: {
+        product_management: true,
+        inventory_management: true,
+        sales_management: true,
+        customer_management: true,
+        supplier_management: true,
+        purchase_management: true,
+        sales_reports: true,
+        returns_management: true,
+
+        advanced_analytics: false,
+        warehouse_management: false,
+        product_exchange: false,
+        advanced_inventory_reports: false,
+      },
+
+      limits: {
+        products: 100,
+        staff: 2,
+        suppliers: 10,
+        customers: 100,
+      },
+    },
+
+    isActive: true,
+    sortOrder: 2,
+  },
 ];
 
 async function seedSubscriptionPlans() {

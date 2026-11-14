@@ -24,6 +24,11 @@ const EMAIL_USER = process.env.EMAIL_USER?.trim() || "";
 const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD?.trim() || "";
 const EMAIL_FROM = process.env.EMAIL_FROM?.trim() || "";
 
+// Razorpay configuration
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || "";
+
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
+
 if (!allowedEnvironments.includes(NODE_ENV)) {
   throw new Error(
     `Invalid NODE_ENV: ${NODE_ENV}. Must be development, test, or production.`,
@@ -102,4 +107,7 @@ export const env = Object.freeze({
   EMAIL_APP_PASSWORD,
   EMAIL_FROM,
   EMAIL_CONFIGURED: emailSettingsProvided,
+
+  RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET,
 });

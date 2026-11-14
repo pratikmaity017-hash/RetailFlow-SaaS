@@ -16,9 +16,25 @@ import paymentRoutes from "./routes/payment.routes.js";
 import businessCategoryRoutes from "./routes/business-category.routes.js";
 import supplierRoutes from "./routes/supplier.routes.js";
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 const app = express();
 
-const allowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5500"];
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const publicDirectory = path.resolve(__dirname, "../public");
+
+app.use(express.urlencoded({ extended: true }));
+
+app.use(express.static(publicDirectory));
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5500",
+];
 
 app.use(
   cors({
