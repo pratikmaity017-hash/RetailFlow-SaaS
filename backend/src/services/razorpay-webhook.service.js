@@ -22,6 +22,31 @@ function createServiceError(message, statusCode, code) {
 
 const WEBHOOK_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
 
+const WEBHOOK_MAX_RETRIES = 8;
+const WEBHOOK_RETRY_BASE_DELAY_MS = 60 * 1000;
+const WEBHOOK_RETRY_MAX_DELAY_MS = 60 * 60 * 1000;
+
+function isRetryableWebhookError(error) {
+  const statusCode = error.statusCode;
+
+  if (!Number.isInteger(statusCode)) {
+    return true;
+  }
+
+  return (
+    statusCode === 408 ||
+    statusCode === 409 ||
+    statusCode === 429 ||
+    statusCode >= 500
+  );
+}
+
+function calculateWebhookRetryDelay(retryCount) {
+  const delay = WEBHOOK_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, retryCount);
+
+  return Math.min(delay, WEBHOOK_RETRY_MAX_DELAY_MS);
+}
+
 async function claimExistingWebhookEvent({ eventId, processingToken }) {
   const now = new Date();
 
@@ -31,7 +56,14 @@ async function claimExistingWebhookEvent({ eventId, processingToken }) {
     {
       eventId,
       $or: [
-        { status: "failed" },
+        {
+          status: "failed",
+          $or: [
+            { nextRetryAt: null },
+            { nextRetryAt: { $exists: false } },
+            { nextRetryAt: { $lte: now } },
+          ],
+        },
         {
           status: "processing",
           $or: [
@@ -235,6 +267,7 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
           processingStartedAt: null,
           processingToken: null,
           failureReason: null,
+          nextRetryAt: null,
         },
       },
       {
@@ -254,6 +287,16 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
       processed: true,
     };
   } catch (error) {
+    const shouldRetry =
+      isRetryableWebhookError(error) &&
+      webhookEvent.retryCount < WEBHOOK_MAX_RETRIES;
+
+    const nextRetryAt = shouldRetry
+      ? new Date(
+          Date.now() + calculateWebhookRetryDelay(webhookEvent.retryCount),
+        )
+      : null;
+
     await WebhookEvent.findOneAndUpdate(
       {
         _id: webhookEvent._id,
@@ -265,7 +308,8 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
           status: "failed",
           processingStartedAt: null,
           processingToken: null,
-          failureReason: error.message,
+          failureReason: error.message.slice(0, 1000),
+          nextRetryAt,
         },
       },
     );
