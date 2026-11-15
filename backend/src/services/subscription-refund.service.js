@@ -33,6 +33,50 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     );
   }
 
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
+
+  const retryCount = payment.refundRetryCount ?? 0;
+
+  if (payment.refundManualReviewRequired) {
+    return {
+      refunded: false,
+      manualReviewRequired: true,
+      refundStatus: payment.refundStatus,
+    };
+  }
+
+  if (retryCount >= MAX_REFUND_RETRIES) {
+    const freshProcessing =
+      payment.refundStatus === "processing" &&
+      payment.refundProcessingAt &&
+      payment.refundProcessingAt > staleBefore;
+
+    if (freshProcessing) {
+      return {
+        refunded: false,
+        processing: true,
+        refundStatus: "processing",
+      };
+    }
+
+    await BillingPayment.updateOne(
+      { _id: payment._id },
+      {
+        $set: {
+          refundManualReviewRequired: true,
+        },
+      },
+    );
+
+    return {
+      refunded: false,
+      retryLimitReached: true,
+      manualReviewRequired: true,
+      refundStatus: payment.refundStatus,
+    };
+  }
+
   if ((payment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES) {
     await BillingPayment.updateOne(
       {
@@ -62,15 +106,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     };
   }
 
-  if ((payment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES) {
-    return {
-      refunded: false,
-      manualReviewRequired: true,
-      retryLimitReached: true,
-      refundRetryCount: payment.refundRetryCount,
-    };
-  }
-
   if (!payment.razorpayPaymentId) {
     throw createServiceError(
       "Captured Razorpay payment ID is missing",
@@ -78,9 +113,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
       "REFUND_PAYMENT_ID_MISSING",
     );
   }
-
-  const now = new Date();
-  const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
 
   // Claim the refund operation. A stale processing claim can be retried
   // safely because the same Razorpay idempotency key is reused.
@@ -154,6 +186,10 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
           ? "failed"
           : "pending",
       refundProcessingAt: null,
+      refundManualReviewRequired:
+        !refundProcessed &&
+        (refundFailed ||
+          (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES),
     };
 
     if (refundProcessed) {
@@ -165,8 +201,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
       { _id: claimedPayment._id, status: "refund_pending" },
       {
         $set: update,
-        refundManualReviewRequired:
-          (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES,
       },
     );
 
@@ -174,7 +208,7 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
       refunded: refundProcessed,
       refundStatus: update.refundStatus,
       refundId: refund.id,
-      refundManualReviewRequired: refundFailed,
+      refundManualReviewRequired: update.refundManualReviewRequired,
     };
   } catch (error) {
     await BillingPayment.updateOne(
@@ -183,6 +217,8 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
         $set: {
           refundStatus: "failed",
           refundProcessingAt: null,
+          refundManualReviewRequired:
+            (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES,
         },
       },
     );
@@ -250,9 +286,7 @@ export async function processRefundWebhook({ eventType, refund }) {
     razorpayRefundId: refund.id,
     refundStatus: isProcessed ? "processed" : "failed",
     refundProcessingAt: null,
-    refundManualReviewRequired:
-      refundFailed ||
-      (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES,
+    refundManualReviewRequired: !isProcessed,
   };
 
   if (isProcessed) {
@@ -301,6 +335,12 @@ export async function recoverPendingRenewalRefunds({ batchSize = 10 } = {}) {
       status: "refund_pending",
       refundManualReviewRequired: { $ne: true },
       refundRetryCount: { $gte: MAX_REFUND_RETRIES },
+      $or: [
+        { refundStatus: { $ne: "processing" } },
+        { refundProcessingAt: { $lte: staleBefore } },
+        { refundProcessingAt: { $exists: false } },
+        { refundProcessingAt: null },
+      ],
     },
     {
       $set: {
