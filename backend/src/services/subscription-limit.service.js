@@ -38,23 +38,21 @@ async function getResourceUsage({ organizationId, resource, session }) {
   if (resource === "staff") {
     const now = new Date();
 
-    const [activeMembers, pendingInvitations] = await Promise.all([
-      Membership.countDocuments({
-        organization: organizationId,
-        role: { $in: ["manager", "sales_staff"] },
-        status: "active",
-      }).session(session),
+    const activeMembers = await Membership.countDocuments({
+      organization: organizationId,
+      role: { $in: ["manager", "sales_staff"] },
+      status: "active",
+    }).session(session);
 
-      OrganizationInvitation.countDocuments({
-        organization: organizationId,
-        status: "pending",
-        expiresAt: { $gt: now },
-      }).session(session),
-    ]);
+    const pendingInvitations = await OrganizationInvitation.countDocuments({
+      organization: organizationId,
+      role: { $in: ["manager", "sales_staff"] },
+      status: "pending",
+      expiresAt: { $gt: now },
+    }).session(session);
 
     return activeMembers + pendingInvitations;
   }
-
   throw createServiceError(
     500,
     "UNSUPPORTED_LIMIT_RESOURCE",

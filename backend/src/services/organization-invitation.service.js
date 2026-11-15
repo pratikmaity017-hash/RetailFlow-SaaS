@@ -11,6 +11,7 @@ import {
 } from "../utils/organization-invitation-token.js";
 import { sendEmail } from "./email.service.js";
 import { createOrganizationInvitationTemplate } from "../templates/organization-invitation.template.js";
+import { withSubscriptionLimit } from "./subscription-limit.service.js";
 
 const INVITATION_EXPIRY_DAYS = 7;
 
@@ -154,13 +155,27 @@ export async function createOrganizationInvitation({
   let invitation;
 
   try {
-    invitation = await OrganizationInvitation.create({
-      organization: organizationId,
-      email: normalizedEmail,
-      role,
-      invitedBy: actorUserId,
-      tokenHash,
-      expiresAt,
+    invitation = await withSubscriptionLimit({
+      organizationId,
+      resource: "staff",
+
+      operation: async (session) => {
+        const [createdInvitation] = await OrganizationInvitation.create(
+          [
+            {
+              organization: organizationId,
+              email: normalizedEmail,
+              role,
+              invitedBy: actorUserId,
+              tokenHash,
+              expiresAt,
+            },
+          ],
+          { session },
+        );
+
+        return createdInvitation;
+      },
     });
   } catch (error) {
     // Handle duplicate invitations caused by concurrent requests.
