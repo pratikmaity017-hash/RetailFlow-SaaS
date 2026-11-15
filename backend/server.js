@@ -33,11 +33,15 @@ const shutdown = async (signal) => {
   console.log(`${signal} received. Starting graceful shutdown...`);
 
   try {
+    // Stop the worker and wait for its active recovery to finish.
+    if (stopWebhookRecoveryWorker) {
+      await stopWebhookRecoveryWorker();
+      stopWebhookRecoveryWorker = null;
+    }
+
+    // Close the HTTP server.
     if (server) {
       await new Promise((resolve, reject) => {
-        if (stopWebhookRecoveryWorker) {
-          stopWebhookRecoveryWorker();
-        }
         server.close((error) => {
           if (error) reject(error);
           else resolve();
@@ -45,6 +49,7 @@ const shutdown = async (signal) => {
       });
     }
 
+    // Disconnect MongoDB only after worker shutdown.
     await mongoose.disconnect();
 
     console.log("MongoDB disconnected.");
