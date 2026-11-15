@@ -637,3 +637,121 @@
   outline: 3px solid rgba(59, 130, 246, 0.2);
   outline-offset: 2px;
 }
+
+/* Stock Movement History */
+
+.inventory-movement-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.inventory-movement-type.stock_in {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.inventory-movement-type.stock_out {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.inventory-movement-type.adjustment {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.inventory-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .inventory-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inventory-pagination > div {
+    width: 100%;
+  }
+
+  .inventory-pagination button {
+    flex: 1;
+  }
+}
+
+.inventory-movement-row-new {
+  animation: movementRowEnter 0.55s ease-out;
+  background: #f0fdf4;
+}
+
+@keyframes movementRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+    background: #bbf7d0;
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    background: #f0fdf4;
+  }
+}
+
+.inventory-movement-skeleton-row td {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.inventory-skeleton-line {
+  display: block;
+  width: 65px;
+  height: 13px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: inventorySkeletonLoading 1.2s ease-in-out infinite;
+}
+
+.inventory-skeleton-line.short {
+  width: 45px;
+}
+
+.inventory-skeleton-line.long {
+  width: 110px;
+}
+
+@keyframes inventorySkeletonLoading {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
