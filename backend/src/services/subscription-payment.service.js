@@ -463,6 +463,14 @@ export async function recoverSubscriptionPayment({
     );
   }
 
+  if (orderId && orderId !== billingPayment.razorpayOrderId) {
+    throw createServiceError(
+      "The supplied order ID does not belong to this billing payment",
+      400,
+      "PAYMENT_ORDER_MISMATCH",
+    );
+  }
+
   if (billingPayment.status === "captured") {
     return {
       alreadyVerified: true,
