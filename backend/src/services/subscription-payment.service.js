@@ -230,6 +230,18 @@ async function activateSubscription({
         );
       }
 
+      if (
+        currentPayment.paymentType === "renewal" &&
+        subscription.lastPaymentAt &&
+        currentPayment.createdAt <= subscription.lastPaymentAt
+      ) {
+        throw createServiceError(
+          "This renewal payment is stale because the subscription was already renewed.",
+          409,
+          "STALE_RENEWAL_PAYMENT",
+        );
+      }
+
       if (!["initial", "renewal"].includes(currentPayment.paymentType)) {
         throw createServiceError(
           "Invalid billing payment type",
