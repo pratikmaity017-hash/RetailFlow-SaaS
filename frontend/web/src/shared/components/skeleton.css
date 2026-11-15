@@ -45,3 +45,25 @@
     animation: none;
   }
 }
+
+@keyframes skeleton-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.skeleton-content-enter {
+  animation: skeleton-content-enter 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-content-enter {
+    animation: none;
+  }
+}

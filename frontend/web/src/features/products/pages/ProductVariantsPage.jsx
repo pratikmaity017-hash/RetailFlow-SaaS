@@ -13,6 +13,7 @@ import {
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./product-variants.css";
+import Skeleton from "../../../shared/components/Skeleton";
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
@@ -468,16 +469,62 @@ export default function ProductVariantsPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || (selectedOrganizationId && isVariantsLoading && !product)) {
     return (
-      <main className="variant-page">
-        <p className="variant-loading">Loading organizations...</p>
+      <main className="variant-page variant-skeleton-page">
+        <header className="variant-page-header">
+          <div className="variant-skeleton-heading">
+            <Skeleton width="150px" height="12px" />
+            <Skeleton width="210px" height="32px" />
+            <Skeleton width="280px" height="16px" />
+          </div>
+
+          <Skeleton width="150px" height="42px" />
+        </header>
+
+        <section className="variant-product-summary">
+          <div className="variant-skeleton-heading">
+            <Skeleton width="110px" height="14px" />
+            <Skeleton width="190px" height="26px" />
+            <Skeleton width="150px" height="14px" />
+          </div>
+          <Skeleton width="130px" height="42px" />
+        </section>
+
+        <section className="variant-stat-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <article className="variant-stat-card" key={index}>
+              <Skeleton width="120px" height="14px" />
+              <Skeleton width="60px" height="30px" />
+            </article>
+          ))}
+        </section>
+
+        <section className="variant-list-card">
+          <div className="variant-list-toolbar">
+            <div className="variant-skeleton-heading">
+              <Skeleton width="140px" height="22px" />
+              <Skeleton width="240px" height="14px" />
+            </div>
+            <Skeleton width="220px" height="40px" />
+          </div>
+
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div className="variant-skeleton-row" key={index}>
+              <Skeleton width="15%" height="16px" />
+              <Skeleton width="14%" height="16px" />
+              <Skeleton width="18%" height="16px" />
+              <Skeleton width="12%" height="16px" />
+              <Skeleton width="14%" height="16px" />
+            </div>
+          ))}
+        </section>
       </main>
     );
   }
 
   return (
-    <main className="variant-page">
+    <main className="variant-page skeleton-content-enter">
       <header className="variant-page-header">
         <div>
           <p className="variant-eyebrow">INVENTORY MANAGEMENT</p>
@@ -981,7 +1028,21 @@ export default function ProductVariantsPage() {
                 </div>
 
                 {isVariantsLoading ? (
-                  <p className="variant-loading">Loading product variants...</p>
+                  <div className="variant-skeleton-table">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div className="variant-skeleton-row" key={index}>
+                        <Skeleton width="15%" height="16px" />
+                        <Skeleton width="14%" height="16px" />
+                        <Skeleton width="18%" height="16px" />
+                        <Skeleton width="12%" height="16px" />
+                        <Skeleton width="14%" height="16px" />
+                        <Skeleton width="10%" height="24px" />
+                        {canManageVariants && (
+                          <Skeleton width="12%" height="32px" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 ) : filteredVariants.length === 0 ? (
                   <div className="variant-empty-state">
                     <h3>

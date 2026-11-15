@@ -637,3 +637,31 @@
     width: 100%;
   }
 }
+
+/* Product variants skeleton loading */
+
+.variant-skeleton-page .variant-skeleton-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.variant-skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+@media (max-width: 600px) {
+  .variant-skeleton-row {
+    gap: 8px;
+    padding: 14px 10px;
+  }
+}
+
+.variant-skeleton-table {
+  width: 100%;
+}
