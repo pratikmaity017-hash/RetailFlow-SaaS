@@ -21,7 +21,7 @@ function createServiceError(message, statusCode, code) {
 
 async function reconcileRazorpayOrder(billingPayment) {
   if (
-    billingPayment.paymentType !== "renewal" ||
+    !["initial", "renewal"].includes(billingPayment.paymentType) ||
     billingPayment.status !== "pending" ||
     !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
   ) {
@@ -82,6 +82,7 @@ async function reconcileRazorpayOrder(billingPayment) {
         orderCreationStatus: "created",
         failureReason: null,
       },
+      $or: [{ razorpayOrderId: null }, { razorpayOrderId: { $exists: false } }],
     },
     {
       returnDocument: "after",
@@ -89,6 +90,15 @@ async function reconcileRazorpayOrder(billingPayment) {
   );
 
   if (!savedPayment) {
+    const latestPayment = await BillingPayment.findById(billingPayment._id);
+
+    if (
+      latestPayment?.razorpayOrderId === order.id &&
+      latestPayment.status === "pending"
+    ) {
+      return latestPayment.razorpayOrderId;
+    }
+
     throw createServiceError(
       "Payment state changed during reconciliation. Try recovery again.",
       409,
@@ -481,7 +491,7 @@ export async function reconcileWebhookRazorpayOrder(orderId) {
 
   // Only reconcile uncertain renewal order creation.
   if (
-    billingPayment.paymentType !== "renewal" ||
+    !["initial", "renewal"].includes(billingPayment.paymentType) ||
     billingPayment.status !== "pending" ||
     !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
   ) {
