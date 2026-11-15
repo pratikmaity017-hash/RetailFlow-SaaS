@@ -10,6 +10,8 @@ import {
   getStockMovements,
 } from "../inventoryService";
 
+import Skeleton from "../../../shared/components/Skeleton";
+
 import "./inventory.css";
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
@@ -459,8 +461,83 @@ export default function StockAdjustmentPage() {
 
   if (isLoading) {
     return (
-      <main className="inventory-page">
-        <p className="inventory-loading">Loading organizations...</p>
+      <main className="inventory-page inventory-skeleton-page">
+        <header className="inventory-page-header">
+          <div className="inventory-skeleton-heading">
+            <Skeleton width="130px" height="12px" />
+            <Skeleton width="210px" height="32px" />
+            <Skeleton width="320px" height="16px" />
+          </div>
+          <Skeleton width="145px" height="42px" />
+        </header>
+
+        <section className="inventory-adjustment-card">
+          <div className="inventory-section-heading">
+            <div className="inventory-skeleton-heading">
+              <Skeleton width="180px" height="22px" />
+              <Skeleton width="260px" height="14px" />
+            </div>
+          </div>
+
+          <div className="inventory-adjustment-skeleton-grid">
+            <div>
+              <Skeleton width="65px" height="14px" />
+              <Skeleton width="100%" height="44px" />
+            </div>
+            <div>
+              <Skeleton width="110px" height="14px" />
+              <Skeleton width="100%" height="44px" />
+            </div>
+          </div>
+        </section>
+
+        <section className="inventory-adjustment-card">
+          <Skeleton width="130px" height="22px" />
+          <div className="inventory-current-stock inventory-current-stock-skeleton">
+            <div>
+              <Skeleton width="130px" height="13px" />
+              <Skeleton width="75px" height="28px" />
+            </div>
+            <div>
+              <Skeleton width="130px" height="13px" />
+              <Skeleton width="75px" height="28px" />
+            </div>
+            <Skeleton width="105px" height="32px" />
+          </div>
+        </section>
+
+        <section className="inventory-adjustment-card">
+          <Skeleton width="130px" height="22px" />
+          <div className="inventory-adjustment-skeleton">
+            <div className="inventory-adjustment-skeleton-grid">
+              <div>
+                <Skeleton width="120px" height="14px" />
+                <Skeleton width="100%" height="44px" />
+              </div>
+              <div>
+                <Skeleton width="90px" height="14px" />
+                <Skeleton width="100%" height="44px" />
+              </div>
+              <div className="inventory-adjustment-skeleton-full">
+                <Skeleton width="70px" height="14px" />
+                <Skeleton width="100%" height="100px" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="inventory-adjustment-card">
+          <Skeleton width="190px" height="22px" />
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div className="inventory-skeleton-row" key={index}>
+              <Skeleton width="12%" height="16px" />
+              <Skeleton width="12%" height="16px" />
+              <Skeleton width="14%" height="16px" />
+              <Skeleton width="14%" height="16px" />
+              <Skeleton width="18%" height="16px" />
+            </div>
+          ))}
+        </section>
       </main>
     );
   }
@@ -524,6 +601,11 @@ export default function StockAdjustmentPage() {
               onChange={handleProductChange}
               disabled={!selectedOrganizationId || isProductsLoading}
             >
+              {isProductsLoading && (
+                <div style={{ marginTop: "8px" }}>
+                  <Skeleton width="100%" height="40px" />
+                </div>
+              )}
               <option value="">
                 {isProductsLoading ? "Loading products..." : "Select product"}
               </option>
@@ -543,6 +625,11 @@ export default function StockAdjustmentPage() {
               onChange={handleVariantChange}
               disabled={!selectedProductId || isVariantsLoading}
             >
+              {isVariantsLoading && (
+                <div style={{ marginTop: "8px" }}>
+                  <Skeleton width="100%" height="40px" />
+                </div>
+              )}
               <option value="">
                 {isVariantsLoading ? "Loading variants..." : "Select variant"}
               </option>
@@ -587,7 +674,19 @@ export default function StockAdjustmentPage() {
           </div>
 
           {isInventoryLoading ? (
-            <p className="inventory-loading">Loading current stock...</p>
+            <div className="inventory-current-stock inventory-current-stock-skeleton">
+              <div>
+                <Skeleton width="130px" height="13px" />
+                <Skeleton width="75px" height="28px" />
+              </div>
+
+              <div>
+                <Skeleton width="130px" height="13px" />
+                <Skeleton width="75px" height="28px" />
+              </div>
+
+              <Skeleton width="105px" height="32px" />
+            </div>
           ) : inventory ? (
             <div className="inventory-current-stock">
               <div>
@@ -614,7 +713,7 @@ export default function StockAdjustmentPage() {
         </section>
       )}
 
-      {selectedVariantId && !isInventoryLoading && inventory && (
+      {selectedVariantId && (
         <section className="inventory-adjustment-card">
           <div className="inventory-section-heading">
             <div>
@@ -623,7 +722,31 @@ export default function StockAdjustmentPage() {
             </div>
           </div>
 
-          {!canAdjustStock ? (
+          {isInventoryLoading ? (
+            <div className="inventory-adjustment-skeleton">
+              <div className="inventory-adjustment-skeleton-grid">
+                <div>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="100%" height="44px" />
+                </div>
+
+                <div>
+                  <Skeleton width="90px" height="14px" />
+                  <Skeleton width="100%" height="44px" />
+                </div>
+
+                <div className="inventory-adjustment-skeleton-full">
+                  <Skeleton width="70px" height="14px" />
+                  <Skeleton width="100%" height="100px" />
+                </div>
+              </div>
+
+              <div className="inventory-form-actions">
+                <Skeleton width="100px" height="42px" />
+                <Skeleton width="130px" height="42px" />
+              </div>
+            </div>
+          ) : !canAdjustStock ? (
             <div className="inventory-alert" role="alert">
               Your organization role does not allow stock adjustments. Only
               Owners and Managers can perform this action.
@@ -737,7 +860,48 @@ export default function StockAdjustmentPage() {
           )}
 
           {isMovementsLoading ? (
-            <p className="inventory-loading">Loading movement history...</p>
+            <div className="inventory-table-wrapper">
+              <table className="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Operation</th>
+                    <th>Quantity</th>
+                    <th>Previous Stock</th>
+                    <th>New Stock</th>
+                    <th>Reason</th>
+                    <th>Performed By</th>
+                    <th>Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <tr key={index}>
+                      <td>
+                        <Skeleton width="75px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="45px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="55px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="55px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="110px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="90px" height="16px" />
+                      </td>
+                      <td>
+                        <Skeleton width="120px" height="16px" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : movements.length === 0 ? (
             <div className="inventory-empty-state">
               <h3>No stock movements yet</h3>
