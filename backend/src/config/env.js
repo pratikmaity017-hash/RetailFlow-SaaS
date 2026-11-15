@@ -5,6 +5,25 @@ dotenv.config();
 const allowedEnvironments = ["development", "test", "production"];
 
 const NODE_ENV = process.env.NODE_ENV || "development";
+const DEV_BYPASS_FEATURE_ENTITLEMENTS_RAW =
+  process.env.DEV_BYPASS_FEATURE_ENTITLEMENTS || "false";
+
+if (
+  !["true", "false"].includes(DEV_BYPASS_FEATURE_ENTITLEMENTS_RAW.toLowerCase())
+) {
+  throw new Error(
+    "DEV_BYPASS_FEATURE_ENTITLEMENTS must be either true or false.",
+  );
+}
+
+const DEV_BYPASS_FEATURE_ENTITLEMENTS =
+  DEV_BYPASS_FEATURE_ENTITLEMENTS_RAW.toLowerCase() === "true";
+
+if (DEV_BYPASS_FEATURE_ENTITLEMENTS && NODE_ENV !== "development") {
+  throw new Error(
+    "DEV_BYPASS_FEATURE_ENTITLEMENTS can only be enabled in development.",
+  );
+}
 const PORT = Number(process.env.PORT || 3000);
 const MONGODB_URI = process.env.MONGODB_URI?.trim();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -95,6 +114,7 @@ const EMAIL_SECURE =
 
 export const env = Object.freeze({
   NODE_ENV,
+  DEV_BYPASS_FEATURE_ENTITLEMENTS,
   PORT,
   MONGODB_URI,
   JWT_SECRET,
