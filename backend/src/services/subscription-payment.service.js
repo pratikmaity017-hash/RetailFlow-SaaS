@@ -678,7 +678,7 @@ export async function recoverSubscriptionPayment({
   return activateOrHandleStaleRenewal({
     organizationId,
     billingPayment,
-    paymentId,
+    paymentId: capturedPayment.id,
   });
 }
 
