@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import WebhookEvent from "../models/webhook-event.model.js";
 
 import {
@@ -17,6 +18,45 @@ function createServiceError(message, statusCode, code) {
   error.statusCode = statusCode;
   error.code = code;
   return error;
+}
+
+const WEBHOOK_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
+
+async function claimExistingWebhookEvent({ eventId, processingToken }) {
+  const now = new Date();
+
+  const staleBefore = new Date(now.getTime() - WEBHOOK_PROCESSING_TIMEOUT_MS);
+
+  return WebhookEvent.findOneAndUpdate(
+    {
+      eventId,
+      $or: [
+        { status: "failed" },
+        {
+          status: "processing",
+          $or: [
+            { processingStartedAt: { $lte: staleBefore } },
+            { processingStartedAt: null },
+            { processingStartedAt: { $exists: false } },
+          ],
+        },
+      ],
+    },
+    {
+      $set: {
+        status: "processing",
+        processingStartedAt: now,
+        processingToken,
+        failureReason: null,
+      },
+      $inc: {
+        retryCount: 1,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
 }
 
 async function processPaymentEvent(eventType, payload) {
@@ -131,6 +171,8 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
     );
   }
 
+  const processingToken = randomUUID();
+
   let webhookEvent;
 
   try {
@@ -139,51 +181,94 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
       eventType,
       payload,
       status: "processing",
+      processingStartedAt: new Date(),
+      processingToken,
     });
   } catch (error) {
     if (error.code !== 11000) {
       throw error;
     }
 
-    webhookEvent = await WebhookEvent.findOne({ eventId });
+    webhookEvent = await claimExistingWebhookEvent({
+      eventId,
+      processingToken,
+    });
 
     if (!webhookEvent) {
-      throw error;
+      const existingEvent = await WebhookEvent.findOne({ eventId });
+
+      if (!existingEvent) {
+        throw error;
+      }
+
+      if (existingEvent.status === "processed") {
+        return {
+          duplicate: true,
+          processed: true,
+        };
+      }
+
+      return {
+        duplicate: true,
+        processing: true,
+      };
     }
-
-    if (webhookEvent.status === "processed") {
-      return { duplicate: true, processed: true };
-    }
-
-    if (webhookEvent.status === "processing") {
-      return { duplicate: true, processing: true };
-    }
-
-    webhookEvent.status = "processing";
-    webhookEvent.retryCount += 1;
-    webhookEvent.failureReason = null;
-
-    await webhookEvent.save();
   }
 
+  // Always process the stored event data, not duplicate request data.
+  const storedEventType = webhookEvent.eventType;
+  const storedPayload = webhookEvent.payload;
+
   try {
-    await processPaymentEvent(eventType, payload);
+    await processPaymentEvent(storedEventType, storedPayload);
 
-    webhookEvent.status = "processed";
-    webhookEvent.processedAt = new Date();
-    webhookEvent.failureReason = null;
+    const completedEvent = await WebhookEvent.findOneAndUpdate(
+      {
+        _id: webhookEvent._id,
+        status: "processing",
+        processingToken,
+      },
+      {
+        $set: {
+          status: "processed",
+          processedAt: new Date(),
+          processingStartedAt: null,
+          processingToken: null,
+          failureReason: null,
+        },
+      },
+      {
+        returnDocument: "after",
+      },
+    );
 
-    await webhookEvent.save();
+    if (!completedEvent) {
+      return {
+        duplicate: true,
+        processing: true,
+      };
+    }
 
     return {
       duplicate: false,
       processed: true,
     };
   } catch (error) {
-    webhookEvent.status = "failed";
-    webhookEvent.failureReason = error.message;
-
-    await webhookEvent.save();
+    await WebhookEvent.findOneAndUpdate(
+      {
+        _id: webhookEvent._id,
+        status: "processing",
+        processingToken,
+      },
+      {
+        $set: {
+          status: "failed",
+          processingStartedAt: null,
+          processingToken: null,
+          failureReason: error.message,
+        },
+      },
+    );
 
     throw error;
   }
