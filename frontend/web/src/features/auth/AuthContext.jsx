@@ -50,6 +50,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true;
 
+    function handleAuthExpired() {
+      setUser(null);
+      setIsLoading(false);
+    }
+
+    window.addEventListener("retailflow:auth-expired", handleAuthExpired);
+
     async function initializeAuth() {
       const restoredUser = await restoreSession();
 
@@ -63,6 +70,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       isMounted = false;
+      window.removeEventListener("retailflow:auth-expired", handleAuthExpired);
     };
   }, []);
 
