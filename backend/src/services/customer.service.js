@@ -1,5 +1,6 @@
 import { createServiceError } from "../utils/service-error.util.js";
 import Customer from "../models/customer.model.js";
+import { withSubscriptionLimit } from "./subscription-limit.service.js";
 
 // Escape user input before using it in a MongoDB regular expression.
 function escapeRegex(value) {
@@ -17,14 +18,27 @@ function normalizePagination(value, fallback, maximum = Infinity) {
 }
 
 // Create a customer inside the authenticated organization.
+// Create a customer inside the authenticated organization.
 export async function createCustomer({ organizationId, userId, customerData }) {
-  const customer = await Customer.create({
-    ...customerData,
-    organization: organizationId,
-    createdBy: userId,
-  });
+  return withSubscriptionLimit({
+    organizationId,
+    resource: "customers",
 
-  return customer;
+    operation: async (session) => {
+      const [customer] = await Customer.create(
+        [
+          {
+            ...customerData,
+            organization: organizationId,
+            createdBy: userId,
+          },
+        ],
+        { session },
+      );
+
+      return customer;
+    },
+  });
 }
 
 // Get customers belonging only to the requested organization.
