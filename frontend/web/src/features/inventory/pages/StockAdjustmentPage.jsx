@@ -4,7 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { getUserOrganizations } from "../../organization/organizationService";
 import { getProducts, getProductVariants } from "../../products/productService";
 
-import { getVariantInventory, adjustStock } from "../inventoryService";
+import {
+  getVariantInventory,
+  adjustStock,
+  getStockMovements,
+} from "../inventoryService";
 
 import "./inventory.css";
 
@@ -45,6 +49,14 @@ export default function StockAdjustmentPage() {
   const [isVariantsLoading, setIsVariantsLoading] = useState(false);
   const [isInventoryLoading, setIsInventoryLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [movements, setMovements] = useState([]);
+  const [movementPagination, setMovementPagination] = useState(null);
+  const [movementPage, setMovementPage] = useState(1);
+  const [isMovementsLoading, setIsMovementsLoading] = useState(false);
+  const [movementError, setMovementError] = useState("");
+  const [movementRefreshKey, setMovementRefreshKey] = useState(0);
+  const [newMovementId, setNewMovementId] = useState(null);
 
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
@@ -225,6 +237,58 @@ export default function StockAdjustmentPage() {
     };
   }, [selectedOrganizationId, selectedProductId, selectedVariantId]);
 
+  useEffect(() => {
+    if (!selectedOrganizationId || !selectedProductId || !selectedVariantId) {
+      setMovements([]);
+      setMovementPagination(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadMovements() {
+      try {
+        setIsMovementsLoading(true);
+        setMovementError("");
+
+        const response = await getStockMovements(
+          selectedOrganizationId,
+          selectedProductId,
+          selectedVariantId,
+          movementPage,
+          20,
+        );
+
+        if (isMounted) {
+          setMovements(response?.data?.movements || []);
+          setMovementPagination(response?.data?.pagination || null);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setMovementError(
+            getErrorMessage(err, "Unable to load stock movement history."),
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsMovementsLoading(false);
+        }
+      }
+    }
+
+    loadMovements();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    selectedOrganizationId,
+    selectedProductId,
+    selectedVariantId,
+    movementPage,
+    movementRefreshKey,
+  ]);
+
   const selectedOrganization = organizations.find(
     (item) => item.organization.id === selectedOrganizationId,
   );
@@ -337,6 +401,38 @@ export default function StockAdjustmentPage() {
       );
 
       const updatedInventory = response?.data?.inventory;
+
+      const newMovement = response?.data?.movement;
+
+      if (!newMovement) {
+        throw new Error("Stock adjusted, but movement response was missing.");
+      }
+
+      setNewMovementId(newMovement._id);
+
+      // Fetch latest movements with populated user details.
+      setMovementPage(1);
+
+      try {
+        const movementResponse = await getStockMovements(
+          selectedOrganizationId,
+          selectedProductId,
+          selectedVariantId,
+          1,
+          20,
+        );
+
+        setMovements(movementResponse?.data?.movements || []);
+
+        setMovementPagination(movementResponse?.data?.pagination || null);
+      } catch (movementError) {
+        // Keep the successful stock adjustment even if history refresh fails.
+        setMovements((previous) => [newMovement, ...previous].slice(0, 20));
+
+        setMovementError(
+          getErrorMessage(movementError, "Unable to refresh movement history."),
+        );
+      }
 
       if (!updatedInventory) {
         throw new Error("Stock was adjusted, but the response was invalid.");
@@ -625,7 +721,131 @@ export default function StockAdjustmentPage() {
           )}
         </section>
       )}
+      {selectedVariantId && inventory && (
+        <section className="inventory-adjustment-card">
+          <div className="inventory-section-heading">
+            <div>
+              <h2>Stock Movement History</h2>
+              <p>Track all stock changes for this product variant.</p>
+            </div>
+          </div>
 
+          {movementError && (
+            <div className="inventory-alert" role="alert">
+              {movementError}
+            </div>
+          )}
+
+          {isMovementsLoading ? (
+            <p className="inventory-loading">Loading movement history...</p>
+          ) : movements.length === 0 ? (
+            <div className="inventory-empty-state">
+              <h3>No stock movements yet</h3>
+              <p>Stock adjustment records will appear here.</p>
+            </div>
+          ) : (
+            <>
+              <div className="inventory-table-wrapper">
+                <table className="inventory-table">
+                  <thead>
+                    <tr>
+                      <th>Operation</th>
+                      <th>Quantity</th>
+                      <th>Previous Stock</th>
+                      <th>New Stock</th>
+                      <th>Reason</th>
+                      <th>Performed By</th>
+                      <th>Date & Time</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {isSubmitting && (
+                      <tr className="inventory-movement-skeleton-row">
+                        <td>
+                          <span className="inventory-skeleton-line short" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line long" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line" />
+                        </td>
+                        <td>
+                          <span className="inventory-skeleton-line long" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {movements.map((movement) => (
+                      <tr
+                        key={movement._id}
+                        className={
+                          movement._id === newMovementId
+                            ? "inventory-movement-row-new"
+                            : ""
+                        }
+                      >
+                        <td>
+                          <span
+                            className={`inventory-movement-type ${movement.type}`}
+                          >
+                            {movement.type.replaceAll("_", " ")}
+                          </span>
+                        </td>
+                        <td>{movement.quantity}</td>
+                        <td>{movement.previousQuantity}</td>
+                        <td>{movement.newQuantity}</td>
+                        <td>{movement.reason}</td>
+                        <td>{movement.performedBy?.name || "Unknown"}</td>
+                        <td>{new Date(movement.createdAt).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {movementPagination && movementPagination.totalPages > 1 && (
+                <div className="inventory-pagination">
+                  <span>
+                    Page {movementPagination.currentPage} of{" "}
+                    {movementPagination.totalPages}
+                  </span>
+
+                  <div>
+                    <button
+                      type="button"
+                      className="inventory-secondary-button"
+                      disabled={movementPage <= 1}
+                      onClick={() => setMovementPage((page) => page - 1)}
+                    >
+                      Previous
+                    </button>
+
+                    <button
+                      type="button"
+                      className="inventory-secondary-button"
+                      disabled={movementPage >= movementPagination.totalPages}
+                      onClick={() => setMovementPage((page) => page + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
       {selectedOrganizationId &&
         !isProductsLoading &&
         products.length === 0 && (
