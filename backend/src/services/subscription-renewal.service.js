@@ -157,7 +157,9 @@ export async function createSubscriptionRenewal({
     const subscription = await Subscription.findOne({
       _id: lock.subscriptionId,
       organization: organizationId,
-    }).populate("plan", "code name isActive prices");
+    })
+      .populate("plan", "code name isActive prices")
+      .populate("pendingChange.plan", "code name isActive prices");
 
     await heartbeat.assertOwnership();
 
@@ -177,6 +179,61 @@ export async function createSubscriptionRenewal({
       );
     }
 
+    const pendingChange = subscription.pendingChange;
+    const isPlanChange = Boolean(pendingChange);
+
+    const checkoutPlan = isPlanChange ? pendingChange.plan : subscription.plan;
+
+    const checkoutBillingInterval = isPlanChange
+      ? pendingChange.billingInterval
+      : billingInterval;
+
+    if (isPlanChange) {
+      if (!checkoutPlan) {
+        throw createServiceError(
+          "Scheduled subscription plan was not found",
+          409,
+          "PENDING_CHANGE_PLAN_NOT_FOUND",
+        );
+      }
+
+      if (!checkoutPlan.isActive) {
+        throw createServiceError(
+          "Scheduled subscription plan is no longer available",
+          409,
+          "PENDING_CHANGE_PLAN_INACTIVE",
+        );
+      }
+
+      if (
+        !pendingChange.effectiveAt ||
+        pendingChange.effectiveAt.getTime() !==
+          subscription.currentPeriodEnd?.getTime()
+      ) {
+        throw createServiceError(
+          "Scheduled plan change period does not match the subscription period",
+          409,
+          "PENDING_CHANGE_PERIOD_MISMATCH",
+        );
+      }
+
+      if (pendingChange.effectiveAt > new Date()) {
+        throw createServiceError(
+          "Scheduled plan change is not due yet",
+          409,
+          "PENDING_PLAN_CHANGE_NOT_DUE",
+        );
+      }
+
+      if (billingInterval !== pendingChange.billingInterval) {
+        throw createServiceError(
+          "Billing interval does not match the scheduled plan change",
+          409,
+          "PENDING_PLAN_CHANGE_INTERVAL_MISMATCH",
+        );
+      }
+    }
+
     if (subscription.cancelAtPeriodEnd) {
       throw createServiceError(
         "Subscription cancellation is already scheduled. Resume the subscription before renewing.",
@@ -193,7 +250,7 @@ export async function createSubscriptionRenewal({
       );
     }
 
-    if (!subscription.plan.isActive) {
+    if (!checkoutPlan.isActive) {
       throw createServiceError(
         "Current subscription plan is no longer available",
         409,
@@ -217,7 +274,7 @@ export async function createSubscriptionRenewal({
       );
     }
 
-    const selectedPrice = subscription.plan.prices?.[billingInterval];
+    const selectedPrice = checkoutPlan.prices?.[checkoutBillingInterval];
 
     if (
       !selectedPrice ||
@@ -248,9 +305,8 @@ export async function createSubscriptionRenewal({
     if (existingPendingPayment) {
       if (
         existingPendingPayment.paymentType === "renewal" &&
-        (String(existingPendingPayment.plan) !==
-          String(subscription.plan._id) ||
-          existingPendingPayment.billingInterval !== billingInterval)
+        (String(existingPendingPayment.plan) !== String(checkoutPlan._id) ||
+          existingPendingPayment.billingInterval !== checkoutBillingInterval)
       ) {
         throw createServiceError(
           "A pending renewal checkout already exists with different billing details. Recover or resolve it before starting another renewal.",
@@ -288,7 +344,7 @@ export async function createSubscriptionRenewal({
         return buildRenewalCheckout({
           billingPayment: savedPayment,
           razorpayOrder: recoveredOrder,
-          plan: subscription.plan,
+          plan: checkoutPlan,
           billingInterval: savedPayment.billingInterval,
         });
       }
@@ -307,11 +363,11 @@ export async function createSubscriptionRenewal({
         {
           organization: organizationId,
           subscription: subscription._id,
-          plan: subscription.plan._id,
+          plan: checkoutPlan._id,
           paymentType: "renewal",
           amountPaise: selectedPrice.amountPaise,
           currency: selectedPrice.currency || "INR",
-          billingInterval,
+          billingInterval: checkoutBillingInterval,
           status: "pending",
           orderCreationStatus: "creating",
           gateway: "razorpay",
@@ -340,8 +396,8 @@ export async function createSubscriptionRenewal({
         notes: {
           billingPaymentId: billingPayment._id.toString(),
           organizationId: organizationId.toString(),
-          planCode: subscription.plan.code,
-          billingInterval,
+          planCode: checkoutPlan.code,
+          billingInterval: checkoutBillingInterval,
           paymentType: "renewal",
         },
       });
@@ -402,8 +458,8 @@ export async function createSubscriptionRenewal({
     return buildRenewalCheckout({
       billingPayment,
       razorpayOrder,
-      plan: subscription.plan,
-      billingInterval,
+      plan: checkoutPlan,
+      billingInterval: checkoutBillingInterval,
     });
   } finally {
     heartbeat.stop();
