@@ -1,15 +1,28 @@
 import { createServiceError } from "../utils/service-error.util.js";
 import Product from "../models/product.model.js";
+import { withSubscriptionLimit } from "./subscription-limit.service.js";
 
 // Create a product inside the authenticated organization.
 export async function createProduct({ organizationId, userId, productData }) {
-  const product = await Product.create({
-    ...productData,
-    organization: organizationId,
-    createdBy: userId,
-  });
+  return withSubscriptionLimit({
+    organizationId,
+    resource: "products",
 
-  return product;
+    operation: async (session) => {
+      const [product] = await Product.create(
+        [
+          {
+            ...productData,
+            organization: organizationId,
+            createdBy: userId,
+          },
+        ],
+        { session },
+      );
+
+      return product;
+    },
+  });
 }
 
 // Get products belonging only to the requested organization.
