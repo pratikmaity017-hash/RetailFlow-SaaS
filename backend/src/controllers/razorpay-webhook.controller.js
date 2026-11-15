@@ -32,6 +32,16 @@ export async function handleRazorpayWebhook(req, res, next) {
       payload,
     });
 
+    if (result.processing) {
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: "WEBHOOK_PROCESSING_IN_PROGRESS",
+          message: "Webhook event is still being processed. Please retry.",
+        },
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Razorpay webhook processed successfully.",
