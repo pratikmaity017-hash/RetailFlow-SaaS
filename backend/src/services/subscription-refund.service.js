@@ -77,35 +77,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     };
   }
 
-  if ((payment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES) {
-    await BillingPayment.updateOne(
-      {
-        _id: payment._id,
-        status: "refund_pending",
-      },
-      {
-        $set: {
-          refundManualReviewRequired: true,
-        },
-      },
-    );
-
-    return {
-      refunded: false,
-      manualReviewRequired: true,
-      retryLimitReached: true,
-      refundRetryCount: payment.refundRetryCount,
-    };
-  }
-
-  if (payment.refundManualReviewRequired) {
-    return {
-      refunded: false,
-      manualReviewRequired: true,
-      refundRetryCount: payment.refundRetryCount ?? 0,
-    };
-  }
-
   if (!payment.razorpayPaymentId) {
     throw createServiceError(
       "Captured Razorpay payment ID is missing",
