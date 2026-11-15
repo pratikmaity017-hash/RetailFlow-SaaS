@@ -432,8 +432,28 @@ export default function DashboardPage() {
             )}
 
             {selectedOrganizationId && !productDataReady && (
-              <div className="dashboard-empty-state">
-                Loading product statistics...
+              <div className="dashboard-stat-grid">
+                {userRole !== "sales_staff" && (
+                  <article className="dashboard-stat-card">
+                    <Skeleton width="110px" height="14px" />
+                    <Skeleton width="55px" height="30px" />
+                    <Skeleton width="190px" height="14px" />
+                  </article>
+                )}
+
+                <article className="dashboard-stat-card active">
+                  <Skeleton width="110px" height="14px" />
+                  <Skeleton width="55px" height="30px" />
+                  <Skeleton width="180px" height="14px" />
+                </article>
+
+                {userRole !== "sales_staff" && (
+                  <article className="dashboard-stat-card inactive">
+                    <Skeleton width="110px" height="14px" />
+                    <Skeleton width="55px" height="30px" />
+                    <Skeleton width="150px" height="14px" />
+                  </article>
+                )}
               </div>
             )}
 
@@ -534,8 +554,16 @@ export default function DashboardPage() {
             )}
 
             {selectedOrganizationId && !productDataReady && (
-              <div className="dashboard-empty-state">
-                Loading recent products...
+              <div className="dashboard-table-wrapper">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div className="dashboard-skeleton-row" key={index}>
+                    <Skeleton width="22%" height="16px" />
+                    <Skeleton width="16%" height="16px" />
+                    <Skeleton width="18%" height="16px" />
+                    <Skeleton width="12%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                  </div>
+                ))}
               </div>
             )}
 

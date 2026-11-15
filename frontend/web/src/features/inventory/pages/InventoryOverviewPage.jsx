@@ -9,6 +9,7 @@ import {
 } from "../inventoryService";
 
 import "./inventory.css";
+import Skeleton from "../../../shared/components/Skeleton";
 
 const initialAdjustmentForm = {
   type: "stock_in",
@@ -351,8 +352,69 @@ export default function InventoryOverviewPage() {
 
   if (isLoading) {
     return (
-      <main className="inventory-page">
-        <p className="inventory-loading">Loading organizations...</p>
+      <main className="inventory-page inventory-skeleton-page">
+        <header className="inventory-page-header">
+          <div className="inventory-skeleton-heading">
+            <Skeleton width="110px" height="12px" />
+            <Skeleton width="180px" height="32px" />
+            <Skeleton width="300px" height="14px" />
+            <Skeleton width="220px" height="14px" />
+          </div>
+
+          <Skeleton width="150px" height="40px" />
+        </header>
+
+        <section className="inventory-stat-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <article className="inventory-stat-card" key={index}>
+              <Skeleton width="120px" height="14px" />
+              <Skeleton width="70px" height="30px" />
+            </article>
+          ))}
+        </section>
+
+        <section className="inventory-list-card">
+          <div className="inventory-list-toolbar">
+            <div className="inventory-skeleton-heading">
+              <Skeleton width="160px" height="22px" />
+              <Skeleton width="240px" height="14px" />
+            </div>
+            <Skeleton width="180px" height="38px" />
+          </div>
+
+          <div className="inventory-skeleton-table">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div className="inventory-skeleton-row" key={index}>
+                <Skeleton width="20%" height="16px" />
+                <Skeleton width="15%" height="16px" />
+                <Skeleton width="15%" height="16px" />
+                <Skeleton width="12%" height="16px" />
+                <Skeleton width="15%" height="16px" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="inventory-list-card">
+          <div className="inventory-list-toolbar">
+            <div className="inventory-skeleton-heading">
+              <Skeleton width="150px" height="22px" />
+              <Skeleton width="230px" height="14px" />
+            </div>
+            <Skeleton width="70px" height="24px" />
+          </div>
+
+          <div className="inventory-skeleton-table">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div className="inventory-skeleton-row" key={index}>
+                <Skeleton width="25%" height="16px" />
+                <Skeleton width="20%" height="16px" />
+                <Skeleton width="15%" height="16px" />
+                <Skeleton width="15%" height="16px" />
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     );
   }
@@ -435,18 +497,45 @@ export default function InventoryOverviewPage() {
         <>
           <section className="inventory-stat-grid">
             <article className="inventory-stat-card">
-              <span>Tracked Variants</span>
-              <strong>{totalVariants}</strong>
+              {isInventoryLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="70px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Tracked Variants</span>
+                  <strong>{totalVariants}</strong>
+                </>
+              )}
             </article>
 
             <article className="inventory-stat-card">
-              <span>Total Stock Units</span>
-              <strong>{totalStock.toLocaleString()}</strong>
+              {isInventoryLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="70px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Total Stock Units</span>
+                  <strong>{totalStock.toLocaleString()}</strong>
+                </>
+              )}
             </article>
 
             <article className="inventory-stat-card">
-              <span>Low Stock Variants</span>
-              <strong>{lowStockCount}</strong>
+              {isInventoryLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="70px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Low Stock Variants</span>
+                  <strong>{lowStockCount}</strong>
+                </>
+              )}
             </article>
           </section>
 
@@ -479,7 +568,18 @@ export default function InventoryOverviewPage() {
             </div>
 
             {isInventoryLoading ? (
-              <p className="inventory-loading">Loading inventory...</p>
+              <div className="inventory-skeleton-table">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div className="inventory-skeleton-row" key={index}>
+                    <Skeleton width="20%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                    <Skeleton width="12%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                    {canAdjustStock && <Skeleton width="12%" height="32px" />}
+                  </div>
+                ))}
+              </div>
             ) : filteredItems.length === 0 ? (
               <div className="inventory-empty-state">
                 <h3>
@@ -565,7 +665,16 @@ export default function InventoryOverviewPage() {
             </div>
 
             {isInventoryLoading ? (
-              <p className="inventory-loading">Loading low stock items...</p>
+              <div className="inventory-skeleton-table">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div className="inventory-skeleton-row" key={index}>
+                    <Skeleton width="25%" height="16px" />
+                    <Skeleton width="20%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                    <Skeleton width="15%" height="16px" />
+                  </div>
+                ))}
+              </div>
             ) : lowStockItems.length === 0 ? (
               <div className="inventory-empty-state">
                 <h3>Everything looks good</h3>

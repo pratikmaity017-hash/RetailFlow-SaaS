@@ -5,7 +5,7 @@ import { getProducts, updateProduct } from "../productService";
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./edit-product.css";
-
+import Skeleton from "../../../shared/components/Skeleton";
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
 const initialFormData = {
@@ -160,8 +160,36 @@ export default function EditProductPage() {
 
   if (isLoading) {
     return (
-      <main className="edit-product-page">
-        <p className="edit-product-loading">Loading product...</p>
+      <main className="edit-product-page edit-product-skeleton-page">
+        <header className="edit-product-header">
+          <div className="edit-product-skeleton-heading">
+            <Skeleton width="150px" height="12px" />
+            <Skeleton width="180px" height="32px" />
+            <Skeleton width="260px" height="16px" />
+          </div>
+
+          <Skeleton width="130px" height="42px" />
+        </header>
+
+        <section className="edit-product-card">
+          <div className="edit-product-skeleton-form">
+            <Skeleton width="120px" height="14px" />
+            <Skeleton width="100%" height="44px" />
+
+            <Skeleton width="100px" height="14px" />
+            <Skeleton width="100%" height="100px" />
+
+            <div className="edit-product-skeleton-grid">
+              <Skeleton width="100%" height="44px" />
+              <Skeleton width="100%" height="44px" />
+            </div>
+
+            <div className="edit-product-skeleton-actions">
+              <Skeleton width="100px" height="42px" />
+              <Skeleton width="130px" height="42px" />
+            </div>
+          </div>
+        </section>
       </main>
     );
   }

@@ -9,6 +9,7 @@ import {
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./product-list.css";
+import Skeleton from "../../../shared/components/Skeleton";
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
@@ -206,8 +207,39 @@ export default function ProductListPage() {
 
   if (isLoading) {
     return (
-      <main className="product-page">
-        <p className="product-loading">Loading organizations...</p>
+      <main className="product-page inventory-skeleton-page">
+        <header className="product-page-header">
+          <div className="inventory-skeleton-heading">
+            <Skeleton width="150px" height="12px" />
+            <Skeleton width="180px" height="32px" />
+            <Skeleton width="280px" height="16px" />
+          </div>
+
+          <Skeleton width="130px" height="42px" />
+        </header>
+
+        <section className="product-stat-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <article className="product-stat-card" key={index}>
+              <Skeleton width="120px" height="14px" />
+              <Skeleton width="65px" height="30px" />
+            </article>
+          ))}
+        </section>
+
+        <section className="product-list-card">
+          <Skeleton width="150px" height="22px" />
+          <Skeleton width="230px" height="14px" />
+
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div className="inventory-skeleton-row" key={index}>
+              <Skeleton width="22%" height="16px" />
+              <Skeleton width="15%" height="16px" />
+              <Skeleton width="18%" height="16px" />
+              <Skeleton width="12%" height="16px" />
+            </div>
+          ))}
+        </section>
       </main>
     );
   }
@@ -304,18 +336,45 @@ export default function ProductListPage() {
         <>
           <section className="product-stat-grid">
             <article className="product-stat-card">
-              <span>Total Products</span>
-              <strong>{products.length}</strong>
+              {isProductsLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="65px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Total Products</span>
+                  <strong>{products.length}</strong>
+                </>
+              )}
             </article>
 
             <article className="product-stat-card">
-              <span>Active Products</span>
-              <strong>{activeCount}</strong>
+              {isProductsLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="65px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Active Products</span>
+                  <strong>{activeCount}</strong>
+                </>
+              )}
             </article>
 
             <article className="product-stat-card">
-              <span>Inactive Products</span>
-              <strong>{inactiveCount}</strong>
+              {isProductsLoading ? (
+                <>
+                  <Skeleton width="120px" height="14px" />
+                  <Skeleton width="65px" height="30px" />
+                </>
+              ) : (
+                <>
+                  <span>Inactive Products</span>
+                  <strong>{inactiveCount}</strong>
+                </>
+              )}
             </article>
           </section>
 
@@ -348,7 +407,18 @@ export default function ProductListPage() {
             </div>
 
             {isProductsLoading ? (
-              <p className="product-loading">Loading products...</p>
+              <div className="product-skeleton-table">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div className="product-skeleton-row" key={index}>
+                    <Skeleton width="22%" height="16px" />
+                    <Skeleton width="14%" height="16px" />
+                    <Skeleton width="16%" height="16px" />
+                    <Skeleton width="12%" height="16px" />
+                    <Skeleton width="14%" height="16px" />
+                    {canEditProducts && <Skeleton width="12%" height="32px" />}
+                  </div>
+                ))}
+              </div>
             ) : filteredProducts.length === 0 ? (
               <div className="product-empty-state">
                 <h3>

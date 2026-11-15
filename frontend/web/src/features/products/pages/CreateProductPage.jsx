@@ -5,6 +5,7 @@ import { createProduct } from "../productService";
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import "./create-product.css";
+import Skeleton from "../../../shared/components/Skeleton";
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
@@ -157,8 +158,39 @@ export default function CreateProductPage() {
 
   if (isLoading) {
     return (
-      <main className="create-product-page">
-        <p>Loading organizations...</p>
+      <main className="create-product-page create-product-skeleton-page">
+        <div className="create-product-header">
+          <div className="create-product-skeleton-heading">
+            <Skeleton width="150px" height="12px" />
+            <Skeleton width="180px" height="32px" />
+            <Skeleton width="280px" height="16px" />
+          </div>
+
+          <Skeleton width="130px" height="42px" />
+        </div>
+
+        <section className="create-product-card">
+          <div className="create-product-skeleton-form">
+            <Skeleton width="120px" height="14px" />
+            <Skeleton width="100%" height="44px" />
+
+            <Skeleton width="110px" height="14px" />
+            <Skeleton width="100%" height="44px" />
+
+            <Skeleton width="100px" height="14px" />
+            <Skeleton width="100%" height="100px" />
+
+            <div className="create-product-skeleton-grid">
+              <Skeleton width="100%" height="44px" />
+              <Skeleton width="100%" height="44px" />
+            </div>
+
+            <div className="create-product-skeleton-actions">
+              <Skeleton width="100px" height="42px" />
+              <Skeleton width="130px" height="42px" />
+            </div>
+          </div>
+        </section>
       </main>
     );
   }

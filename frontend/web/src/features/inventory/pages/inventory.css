@@ -964,3 +964,36 @@
     width: 100%;
   }
 }
+
+/* Inventory skeleton loading */
+.inventory-skeleton-page .inventory-skeleton-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inventory-skeleton-page .inventory-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inventory-skeleton-table {
+  width: 100%;
+}
+
+.inventory-skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+@media (max-width: 640px) {
+  .inventory-skeleton-row {
+    gap: 8px;
+    padding: 14px 10px;
+  }
+}
