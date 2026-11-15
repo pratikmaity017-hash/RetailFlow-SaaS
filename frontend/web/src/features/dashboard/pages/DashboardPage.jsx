@@ -9,6 +9,7 @@ import {
 import { getProducts } from "../../products/productService";
 
 import "./dashboard.css";
+import Skeleton from "../../../shared/components/Skeleton";
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
@@ -200,8 +201,63 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <main className="dashboard-placeholder">
-        <p>Loading your RetailFlow dashboard...</p>
+      <main className="dashboard-page dashboard-skeleton-page">
+        <header className="dashboard-header">
+          <div>
+            <Skeleton width="110px" height="12px" />
+            <Skeleton width="280px" height="32px" className="skeleton-gap" />
+            <Skeleton width="240px" height="14px" className="skeleton-gap" />
+          </div>
+          <Skeleton width="90px" height="38px" />
+        </header>
+
+        <section className="dashboard-context-panel">
+          <div>
+            <Skeleton width="150px" height="12px" />
+            <Skeleton width="220px" height="24px" className="skeleton-gap" />
+          </div>
+          <Skeleton width="160px" height="38px" />
+        </section>
+
+        <section className="dashboard-section">
+          <Skeleton width="180px" height="22px" />
+          <div className="dashboard-stat-grid">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div className="dashboard-stat-card" key={index}>
+                <Skeleton width="110px" />
+                <Skeleton width="65px" height="30px" className="skeleton-gap" />
+                <Skeleton width="150px" className="skeleton-gap" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <Skeleton width="140px" height="22px" />
+          <div className="dashboard-actions-grid">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div className="dashboard-action-card" key={index}>
+                <Skeleton width="130px" height="18px" />
+                <Skeleton width="190px" className="skeleton-gap" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <Skeleton width="160px" height="22px" />
+          <div className="dashboard-table-wrapper">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div className="dashboard-skeleton-row" key={index}>
+                <Skeleton width="22%" />
+                <Skeleton width="16%" />
+                <Skeleton width="18%" />
+                <Skeleton width="12%" />
+                <Skeleton width="15%" />
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     );
   }

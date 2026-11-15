@@ -794,3 +794,22 @@
     width: 100%;
   }
 }
+
+.dashboard-skeleton-page .skeleton-gap {
+  margin-top: 12px;
+}
+
+.dashboard-skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+@media (max-width: 640px) {
+  .dashboard-skeleton-row {
+    gap: 8px;
+  }
+}
