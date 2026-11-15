@@ -220,6 +220,7 @@ async function activateSubscription({
         organization: organizationId,
       })
         .populate("plan", "code")
+        .populate("pendingChange.plan", "code")
         .session(session);
 
       if (!subscription) {
@@ -271,18 +272,48 @@ async function activateSubscription({
       }
 
       // Renewal must belong to the subscription's current plan.
-      if (
-        currentPayment.paymentType === "renewal" &&
-        String(currentPayment.plan) !== String(subscription.plan?._id)
-      ) {
-        throw createServiceError(
-          "Renewal payment plan does not match the current subscription plan",
-          409,
-          "RENEWAL_PAYMENT_PLAN_MISMATCH",
-        );
-      }
-
       const now = new Date();
+
+      if (currentPayment.paymentType === "renewal") {
+        if (subscription.pendingChange) {
+          const pendingChange = subscription.pendingChange;
+
+          if (!pendingChange.plan) {
+            throw createServiceError(
+              "Scheduled subscription plan was not found",
+              409,
+              "PENDING_CHANGE_PLAN_NOT_FOUND",
+            );
+          }
+
+          if (!pendingChange.effectiveAt || pendingChange.effectiveAt > now) {
+            throw createServiceError(
+              "Scheduled plan change is not effective yet",
+              409,
+              "PENDING_PLAN_CHANGE_NOT_DUE",
+            );
+          }
+
+          if (
+            String(currentPayment.plan) !== String(pendingChange.plan._id) ||
+            currentPayment.billingInterval !== pendingChange.billingInterval
+          ) {
+            throw createServiceError(
+              "Payment does not match the scheduled subscription plan change",
+              409,
+              "PENDING_PLAN_CHANGE_PAYMENT_MISMATCH",
+            );
+          }
+        } else if (
+          String(currentPayment.plan) !== String(subscription.plan?._id)
+        ) {
+          throw createServiceError(
+            "Renewal payment plan does not match the current subscription plan",
+            409,
+            "RENEWAL_PAYMENT_PLAN_MISMATCH",
+          );
+        }
+      }
 
       const isRenewal = currentPayment.paymentType === "renewal";
 

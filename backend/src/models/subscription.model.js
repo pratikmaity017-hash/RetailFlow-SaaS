@@ -96,7 +96,7 @@ const subscriptionSchema = new mongoose.Schema(
       },
       operation: {
         type: String,
-        enum: ["renewal", "cancellation"],
+        enum: ["renewal", "cancellation", "plan_change"],
         default: null,
       },
       expiresAt: {
