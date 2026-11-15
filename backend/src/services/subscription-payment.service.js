@@ -75,6 +75,7 @@ async function reconcileRazorpayOrder(billingPayment) {
       orderCreationStatus: {
         $in: ["creating", "unknown"],
       },
+      $or: [{ razorpayOrderId: null }, { razorpayOrderId: { $exists: false } }],
     },
     {
       $set: {
@@ -82,7 +83,6 @@ async function reconcileRazorpayOrder(billingPayment) {
         orderCreationStatus: "created",
         failureReason: null,
       },
-      $or: [{ razorpayOrderId: null }, { razorpayOrderId: { $exists: false } }],
     },
     {
       returnDocument: "after",
