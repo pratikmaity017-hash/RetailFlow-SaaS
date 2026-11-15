@@ -33,6 +33,7 @@ export async function getOrganizationSubscriptionUsage({ organizationId }) {
   const [products, staff, suppliers, customers] = await Promise.all([
     Product.countDocuments({
       organization: organizationId,
+       status: "active",
     }),
 
     Membership.countDocuments({
@@ -43,6 +44,7 @@ export async function getOrganizationSubscriptionUsage({ organizationId }) {
 
     Supplier.countDocuments({
       organization: organizationId,
+      status: "active",
     }),
 
     Customer.countDocuments({
