@@ -87,6 +87,48 @@ const plans = [
     isActive: true,
     sortOrder: 2,
   },
+
+  {
+    code: "pro_test",
+    name: "Pro Test",
+    description: "Temporary plan for scheduled plan change verification.",
+
+    prices: {
+      monthly: {
+        amountPaise: 9900,
+        currency: "INR",
+      },
+      yearly: null,
+    },
+
+    entitlements: {
+      features: {
+        product_management: true,
+        inventory_management: true,
+        sales_management: true,
+        customer_management: true,
+        supplier_management: true,
+        purchase_management: true,
+        sales_reports: true,
+        returns_management: true,
+
+        advanced_analytics: true,
+        warehouse_management: false,
+        product_exchange: false,
+        advanced_inventory_reports: false,
+      },
+
+      limits: {
+        products: 500,
+        staff: 10,
+        suppliers: 50,
+        customers: 1000,
+      },
+    },
+
+    isActive: true,
+    sortOrder: 3,
+  },
 ];
 
 async function seedSubscriptionPlans() {
