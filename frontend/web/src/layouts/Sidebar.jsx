@@ -11,7 +11,12 @@ const navigationItems = [
     available: true,
   },
   { label: "Products", path: "/products", icon: "products", available: true },
-  { label: "Inventory", icon: "inventory", available: false },
+  {
+    label: "Inventory",
+    path: "/inventory",
+    icon: "inventory",
+    available: true,
+  },
   { label: "Sales", icon: "sales", available: false },
   { label: "Customers", icon: "customers", available: false },
   { label: "Suppliers", icon: "suppliers", available: false },

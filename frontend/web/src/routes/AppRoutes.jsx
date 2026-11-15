@@ -14,6 +14,9 @@ import CreateProductPage from "../features/products/pages/CreateProductPage";
 import EditProductPage from "../features/products/pages/EditProductPage";
 import ProductVariantsPage from "../features/products/pages/ProductVariantsPage";
 
+import InventoryOverviewPage from "../features/inventory/pages/InventoryOverviewPage";
+import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage";
+
 import AppLayout from "../layouts/AppLayout";
 
 function ProtectedRoute({ children }) {
@@ -89,6 +92,12 @@ function AppRoutes() {
         <Route
           path="/products/:productId/variants"
           element={<ProductVariantsPage />}
+        />
+
+        <Route path="/inventory" element={<InventoryOverviewPage />} />
+        <Route
+          path="/inventory/adjustments"
+          element={<StockAdjustmentPage />}
         />
       </Route>
 
