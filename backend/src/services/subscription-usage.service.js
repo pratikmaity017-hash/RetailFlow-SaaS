@@ -76,7 +76,23 @@ export async function getOrganizationSubscriptionUsage({ organizationId }) {
   const resources = {};
 
   for (const [key, used] of Object.entries(usage)) {
-    const limit = limits[key] ?? null;
+    if (!Object.hasOwn(limits, key)) {
+      throw createServiceError(
+        500,
+        "SUBSCRIPTION_LIMIT_NOT_CONFIGURED",
+        `The ${key} limit is not configured for this plan`,
+      );
+    }
+
+    const limit = limits[key];
+
+    if (limit !== null && (!Number.isSafeInteger(limit) || limit < 0)) {
+      throw createServiceError(
+        500,
+        "INVALID_SUBSCRIPTION_LIMIT",
+        `The ${key} limit configuration is invalid`,
+      );
+    }
 
     resources[key] = {
       used,
