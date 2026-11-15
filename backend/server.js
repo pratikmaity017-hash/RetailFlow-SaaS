@@ -2,13 +2,17 @@ import app from "./src/app.js";
 import { env } from "./src/config/env.js";
 import connectDB from "./src/config/database.js";
 import mongoose from "mongoose";
+import { startWebhookRecoveryWorker } from "./src/workers/webhook-recovery.worker.js";
 
 let server;
 let isShuttingDown = false;
+let stopWebhookRecoveryWorker;
 
 async function startServer() {
   try {
     await connectDB();
+
+    stopWebhookRecoveryWorker = startWebhookRecoveryWorker();
 
     const PORT = Number(process.env.PORT) || env.PORT || 3000;
 
@@ -31,6 +35,9 @@ const shutdown = async (signal) => {
   try {
     if (server) {
       await new Promise((resolve, reject) => {
+        if (stopWebhookRecoveryWorker) {
+          stopWebhookRecoveryWorker();
+        }
         server.close((error) => {
           if (error) reject(error);
           else resolve();

@@ -58,11 +58,7 @@ async function claimExistingWebhookEvent({ eventId, processingToken }) {
       $or: [
         {
           status: "failed",
-          $or: [
-            { nextRetryAt: null },
-            { nextRetryAt: { $exists: false } },
-            { nextRetryAt: { $lte: now } },
-          ],
+          nextRetryAt: { $lte: now },
         },
         {
           status: "processing",
@@ -73,6 +69,7 @@ async function claimExistingWebhookEvent({ eventId, processingToken }) {
           ],
         },
       ],
+      retryCount: { $lt: WEBHOOK_MAX_RETRIES },
     },
     {
       $set: {
@@ -316,4 +313,155 @@ export async function processRazorpayWebhook({ eventId, eventType, payload }) {
 
     throw error;
   }
+}
+
+export async function recoverWebhookEvents({ batchSize = 10 } = {}) {
+  const now = new Date();
+
+  const staleBefore = new Date(now.getTime() - WEBHOOK_PROCESSING_TIMEOUT_MS);
+
+  const candidates = await WebhookEvent.find({
+    retryCount: { $lt: WEBHOOK_MAX_RETRIES },
+    $or: [
+      {
+        status: "failed",
+        nextRetryAt: { $lte: now },
+      },
+      {
+        status: "processing",
+        $or: [
+          { processingStartedAt: { $lte: staleBefore } },
+          { processingStartedAt: null },
+          { processingStartedAt: { $exists: false } },
+        ],
+      },
+    ],
+  })
+    .select("_id")
+    .sort({ createdAt: 1 })
+    .limit(batchSize)
+    .lean();
+
+  let processed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    const processingToken = randomUUID();
+    const claimTime = new Date();
+
+    const claimStaleBefore = new Date(
+      claimTime.getTime() - WEBHOOK_PROCESSING_TIMEOUT_MS,
+    );
+
+    const claimedEvent = await WebhookEvent.findOneAndUpdate(
+      {
+        _id: candidate._id,
+        retryCount: { $lt: WEBHOOK_MAX_RETRIES },
+        $or: [
+          {
+            status: "failed",
+            nextRetryAt: { $lte: claimTime },
+          },
+          {
+            status: "processing",
+            $or: [
+              { processingStartedAt: { $lte: claimStaleBefore } },
+              { processingStartedAt: null },
+              { processingStartedAt: { $exists: false } },
+            ],
+          },
+        ],
+      },
+      {
+        $set: {
+          status: "processing",
+          processingStartedAt: claimTime,
+          processingToken,
+          failureReason: null,
+          nextRetryAt: null,
+        },
+        $inc: {
+          retryCount: 1,
+        },
+      },
+      {
+        returnDocument: "after",
+      },
+    );
+
+    if (!claimedEvent) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await processPaymentEvent(claimedEvent.eventType, claimedEvent.payload);
+
+      const completedEvent = await WebhookEvent.findOneAndUpdate(
+        {
+          _id: claimedEvent._id,
+          status: "processing",
+          processingToken,
+        },
+        {
+          $set: {
+            status: "processed",
+            processedAt: new Date(),
+            processingStartedAt: null,
+            processingToken: null,
+            failureReason: null,
+            nextRetryAt: null,
+          },
+        },
+      );
+
+      if (completedEvent) {
+        processed += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
+      const shouldRetry =
+        isRetryableWebhookError(error) &&
+        claimedEvent.retryCount < WEBHOOK_MAX_RETRIES;
+
+      const nextRetryAt = shouldRetry
+        ? new Date(
+            Date.now() + calculateWebhookRetryDelay(claimedEvent.retryCount),
+          )
+        : null;
+
+      await WebhookEvent.findOneAndUpdate(
+        {
+          _id: claimedEvent._id,
+          status: "processing",
+          processingToken,
+        },
+        {
+          $set: {
+            status: "failed",
+            processingStartedAt: null,
+            processingToken: null,
+            failureReason: error.message.slice(0, 1000),
+            nextRetryAt,
+          },
+        },
+      );
+
+      failed += 1;
+
+      console.error(
+        `Webhook recovery failed for event ${claimedEvent.eventId}:`,
+        error.message,
+      );
+    }
+  }
+
+  return {
+    checked: candidates.length,
+    processed,
+    failed,
+    skipped,
+  };
 }
