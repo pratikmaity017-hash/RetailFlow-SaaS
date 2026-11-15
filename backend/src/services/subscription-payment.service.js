@@ -6,6 +6,8 @@ import Subscription from "../models/subscription.model.js";
 import {
   fetchRazorpayPayment,
   fetchRazorpayOrderPayments,
+  fetchRazorpayOrdersByReceipt,
+  fetchRazorpayOrder,
 } from "./razorpay.service.js";
 
 import { verifyRazorpayPaymentSignature } from "../utils/razorpay-signature.js";
@@ -15,6 +17,86 @@ function createServiceError(message, statusCode, code) {
   error.statusCode = statusCode;
   error.code = code;
   return error;
+}
+
+async function reconcileRazorpayOrder(billingPayment) {
+  if (
+    billingPayment.paymentType !== "renewal" ||
+    billingPayment.status !== "pending" ||
+    !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
+  ) {
+    throw createServiceError(
+      "This payment is not eligible for order reconciliation",
+      409,
+      "ORDER_RECONCILIATION_NOT_ALLOWED",
+    );
+  }
+
+  const receipt = billingPayment._id.toString();
+
+  const orders = await fetchRazorpayOrdersByReceipt(receipt);
+
+  const matchingOrders = orders.filter((order) => order.receipt === receipt);
+
+  if (matchingOrders.length > 1) {
+    throw createServiceError(
+      "Multiple Razorpay orders found. Manual review is required.",
+      409,
+      "MULTIPLE_RAZORPAY_ORDERS_FOUND",
+    );
+  }
+
+  if (matchingOrders.length === 0) {
+    throw createServiceError(
+      "Razorpay order is not yet visible. Try recovery again later.",
+      503,
+      "RAZORPAY_ORDER_RECONCILIATION_PENDING",
+    );
+  }
+
+  const order = matchingOrders[0];
+
+  if (
+    order.amount !== billingPayment.amountPaise ||
+    order.currency !== billingPayment.currency ||
+    order.notes?.billingPaymentId !== receipt
+  ) {
+    throw createServiceError(
+      "Razorpay order details do not match. Manual review is required.",
+      409,
+      "RAZORPAY_ORDER_DETAILS_MISMATCH",
+    );
+  }
+
+  const savedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: billingPayment._id,
+      status: "pending",
+      orderCreationStatus: {
+        $in: ["creating", "unknown"],
+      },
+    },
+    {
+      $set: {
+        razorpayOrderId: order.id,
+        orderCreationStatus: "created",
+        failureReason: null,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!savedPayment) {
+    throw createServiceError(
+      "Payment state changed during reconciliation. Try recovery again.",
+      409,
+      "RENEWAL_PAYMENT_STATE_CHANGED",
+    );
+  }
+
+  return savedPayment.razorpayOrderId;
 }
 
 function calculatePeriodEnd(startDate, billingInterval) {
@@ -303,14 +385,10 @@ export async function recoverSubscriptionPayment({
     );
   }
 
-  const savedOrderId = billingPayment.razorpayOrderId;
+  let savedOrderId = billingPayment.razorpayOrderId;
 
   if (!savedOrderId) {
-    throw createServiceError(
-      "No Razorpay order ID was saved for this payment. Do not create another order. This payment requires gateway reconciliation before it can be safely recovered.",
-      409,
-      "ORDER_CREATION_REQUIRES_MANUAL_RECONCILIATION",
-    );
+    savedOrderId = await reconcileRazorpayOrder(billingPayment);
   }
 
   if (orderId && orderId !== savedOrderId) {
@@ -355,6 +433,120 @@ export async function recoverSubscriptionPayment({
     billingPayment,
     paymentId: capturedPayment.id,
   });
+}
+
+export async function reconcileWebhookRazorpayOrder(orderId) {
+  if (!orderId || typeof orderId !== "string") {
+    throw createServiceError(
+      "Valid Razorpay order ID is required",
+      400,
+      "INVALID_RAZORPAY_ORDER_ID",
+    );
+  }
+
+  // First check whether the order is already linked.
+  const existingPayment = await BillingPayment.findOne({
+    razorpayOrderId: orderId,
+  });
+
+  if (existingPayment) {
+    return {
+      reconciled: false,
+      billingPaymentId: existingPayment._id,
+    };
+  }
+
+  // Fetch the order directly from Razorpay.
+  const razorpayOrder = await fetchRazorpayOrder(orderId);
+
+  const receipt = razorpayOrder.receipt;
+
+  if (!receipt) {
+    throw createServiceError(
+      "Razorpay order has no receipt. Manual review is required.",
+      409,
+      "RAZORPAY_ORDER_RECEIPT_MISSING",
+    );
+  }
+
+  const billingPayment = await BillingPayment.findById(receipt);
+
+  if (!billingPayment) {
+    throw createServiceError(
+      "Billing payment for this Razorpay receipt was not found",
+      404,
+      "BILLING_PAYMENT_NOT_FOUND",
+    );
+  }
+
+  // Only reconcile uncertain renewal order creation.
+  if (
+    billingPayment.paymentType !== "renewal" ||
+    billingPayment.status !== "pending" ||
+    !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
+  ) {
+    throw createServiceError(
+      "Billing payment is not eligible for webhook reconciliation",
+      409,
+      "ORDER_RECONCILIATION_NOT_ALLOWED",
+    );
+  }
+
+  // Verify that this order belongs to this exact billing payment.
+  if (
+    razorpayOrder.amount !== billingPayment.amountPaise ||
+    razorpayOrder.currency !== billingPayment.currency
+  ) {
+    throw createServiceError(
+      "Razorpay order amount or currency does not match",
+      409,
+      "RAZORPAY_ORDER_DETAILS_MISMATCH",
+    );
+  }
+
+  const savedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: billingPayment._id,
+      status: "pending",
+      orderCreationStatus: {
+        $in: ["creating", "unknown"],
+      },
+      $or: [{ razorpayOrderId: null }, { razorpayOrderId: { $exists: false } }],
+    },
+    {
+      $set: {
+        razorpayOrderId: orderId,
+        orderCreationStatus: "created",
+        failureReason: null,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!savedPayment) {
+    // Another process may have completed reconciliation.
+    const latestPayment = await BillingPayment.findById(billingPayment._id);
+
+    if (latestPayment?.razorpayOrderId === orderId) {
+      return {
+        reconciled: true,
+        billingPaymentId: latestPayment._id,
+      };
+    }
+
+    throw createServiceError(
+      "Billing payment changed during webhook reconciliation",
+      409,
+      "ORDER_RECONCILIATION_CONFLICT",
+    );
+  }
+
+  return {
+    reconciled: true,
+    billingPaymentId: savedPayment._id,
+  };
 }
 
 export async function processCapturedPaymentFromWebhook({
