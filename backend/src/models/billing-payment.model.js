@@ -112,6 +112,18 @@ const billingPaymentSchema = new mongoose.Schema(
       default: null,
     },
 
+    refundRetryCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 8,
+    },
+
+    refundManualReviewRequired: {
+      type: Boolean,
+      default: false,
+    },
+
     failureReason: {
       type: String,
       trim: true,

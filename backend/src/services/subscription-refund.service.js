@@ -1,6 +1,8 @@
 import BillingPayment from "../models/billing-payment.model.js";
 import { createRazorpayRefund } from "./razorpay.service.js";
 
+const MAX_REFUND_RETRIES = 8;
+
 function createServiceError(message, statusCode, code) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -30,6 +32,45 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
       "REFUND_NOT_REQUIRED",
     );
   }
+
+  if ((payment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES) {
+    await BillingPayment.updateOne(
+      {
+        _id: payment._id,
+        status: "refund_pending",
+      },
+      {
+        $set: {
+          refundManualReviewRequired: true,
+        },
+      },
+    );
+
+    return {
+      refunded: false,
+      manualReviewRequired: true,
+      retryLimitReached: true,
+      refundRetryCount: payment.refundRetryCount,
+    };
+  }
+
+  if (payment.refundManualReviewRequired) {
+    return {
+      refunded: false,
+      manualReviewRequired: true,
+      refundRetryCount: payment.refundRetryCount ?? 0,
+    };
+  }
+
+  if ((payment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES) {
+    return {
+      refunded: false,
+      manualReviewRequired: true,
+      retryLimitReached: true,
+      refundRetryCount: payment.refundRetryCount,
+    };
+  }
+
   if (!payment.razorpayPaymentId) {
     throw createServiceError(
       "Captured Razorpay payment ID is missing",
@@ -47,11 +88,22 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     {
       _id: payment._id,
       status: "refund_pending",
-      $or: [
-        { refundStatus: { $in: ["pending", "failed"] } },
+      refundManualReviewRequired: { $ne: true },
+      $and: [
         {
-          refundStatus: "processing",
-          refundProcessingAt: { $lte: staleBefore },
+          $or: [
+            { refundRetryCount: { $lt: MAX_REFUND_RETRIES } },
+            { refundRetryCount: { $exists: false } },
+          ],
+        },
+        {
+          $or: [
+            { refundStatus: { $in: ["pending", "failed"] } },
+            {
+              refundStatus: "processing",
+              refundProcessingAt: { $lte: staleBefore },
+            },
+          ],
         },
       ],
     },
@@ -60,8 +112,11 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
         refundStatus: "processing",
         refundProcessingAt: now,
       },
+      $inc: {
+        refundRetryCount: 1,
+      },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   if (!claimedPayment) {
@@ -108,13 +163,18 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
 
     await BillingPayment.updateOne(
       { _id: claimedPayment._id, status: "refund_pending" },
-      { $set: update },
+      {
+        $set: update,
+        refundManualReviewRequired:
+          (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES,
+      },
     );
 
     return {
       refunded: refundProcessed,
       refundStatus: update.refundStatus,
       refundId: refund.id,
+      refundManualReviewRequired: refundFailed,
     };
   } catch (error) {
     await BillingPayment.updateOne(
@@ -190,6 +250,9 @@ export async function processRefundWebhook({ eventType, refund }) {
     razorpayRefundId: refund.id,
     refundStatus: isProcessed ? "processed" : "failed",
     refundProcessingAt: null,
+    refundManualReviewRequired:
+      refundFailed ||
+      (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES,
   };
 
   if (isProcessed) {
@@ -232,17 +295,42 @@ export async function recoverPendingRenewalRefunds({ batchSize = 10 } = {}) {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
 
+  await BillingPayment.updateMany(
+    {
+      paymentType: "renewal",
+      status: "refund_pending",
+      refundManualReviewRequired: { $ne: true },
+      refundRetryCount: { $gte: MAX_REFUND_RETRIES },
+    },
+    {
+      $set: {
+        refundManualReviewRequired: true,
+      },
+    },
+  );
+
   const candidates = await BillingPayment.find({
     paymentType: "renewal",
     status: "refund_pending",
-    $or: [
+    refundManualReviewRequired: { $ne: true },
+    $and: [
       {
-        refundStatus: { $in: ["pending", "failed"] },
-        updatedAt: { $lte: staleBefore },
+        $or: [
+          { refundRetryCount: { $lt: MAX_REFUND_RETRIES } },
+          { refundRetryCount: { $exists: false } },
+        ],
       },
       {
-        refundStatus: "processing",
-        refundProcessingAt: { $lte: staleBefore },
+        $or: [
+          {
+            refundStatus: { $in: ["pending", "failed"] },
+            updatedAt: { $lte: staleBefore },
+          },
+          {
+            refundStatus: "processing",
+            refundProcessingAt: { $lte: staleBefore },
+          },
+        ],
       },
     ],
   })
