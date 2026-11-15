@@ -239,6 +239,9 @@ export async function cancelOrganizationSubscription({ organizationId }) {
         currentSubscription.cancelAtPeriodEnd = true;
         currentSubscription.canceledAt = canceledAt;
 
+        // Cancellation takes priority over any scheduled plan change.
+        currentSubscription.pendingChange = null;
+
         await currentSubscription.save({ session });
 
         updatedSubscription = currentSubscription;
