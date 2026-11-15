@@ -34,11 +34,24 @@ async function findExistingRazorpayOrder(billingPayment) {
   }
 
   const order = matchingOrders[0];
+  await billingPayment.populate("plan", "code");
+  const expectedNotes = {
+    billingPaymentId: receipt,
+    organizationId: billingPayment.organization?.toString(),
+    planCode: billingPayment.plan?.code,
+    billingInterval: billingPayment.billingInterval,
+    paymentType: billingPayment.paymentType,
+  };
+
+  const notesMismatch = Object.entries(expectedNotes).some(
+    ([key, value]) => !value || order.notes?.[key] !== String(value),
+  );
 
   if (
+    order.receipt !== receipt ||
     order.amount !== billingPayment.amountPaise ||
     order.currency !== billingPayment.currency ||
-    order.notes?.billingPaymentId !== receipt
+    notesMismatch
   ) {
     throw createServiceError(
       "Razorpay order details do not match. Manual review is required.",

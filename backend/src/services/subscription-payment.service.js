@@ -55,11 +55,24 @@ async function reconcileRazorpayOrder(billingPayment) {
   }
 
   const order = matchingOrders[0];
+  await billingPayment.populate("plan", "code");
+  const expectedNotes = {
+    billingPaymentId: receipt,
+    organizationId: billingPayment.organization?.toString(),
+    planCode: billingPayment.plan?.code,
+    billingInterval: billingPayment.billingInterval,
+    paymentType: billingPayment.paymentType,
+  };
+
+  const notesMismatch = Object.entries(expectedNotes).some(
+    ([key, value]) => !value || order.notes?.[key] !== String(value),
+  );
 
   if (
+    order.receipt !== receipt ||
     order.amount !== billingPayment.amountPaise ||
     order.currency !== billingPayment.currency ||
-    order.notes?.billingPaymentId !== receipt
+    notesMismatch
   ) {
     throw createServiceError(
       "Razorpay order details do not match. Manual review is required.",
@@ -110,13 +123,43 @@ async function reconcileRazorpayOrder(billingPayment) {
 }
 
 function calculatePeriodEnd(startDate, billingInterval) {
-  const endDate = new Date(startDate);
-
-  if (billingInterval === "monthly") {
-    endDate.setUTCMonth(endDate.getUTCMonth() + 1);
-  } else if (billingInterval === "yearly") {
-    endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
+  if (!["monthly", "yearly"].includes(billingInterval)) {
+    throw createServiceError(
+      "Invalid billing interval",
+      400,
+      "INVALID_BILLING_INTERVAL",
+    );
   }
+
+  const originalDate = new Date(startDate);
+  const originalDay = originalDate.getUTCDate();
+
+  const targetYear =
+    originalDate.getUTCFullYear() + (billingInterval === "yearly" ? 1 : 0);
+
+  const targetMonth =
+    originalDate.getUTCMonth() + (billingInterval === "monthly" ? 1 : 0);
+
+  const normalizedTarget = new Date(Date.UTC(targetYear, targetMonth, 1));
+
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(
+      normalizedTarget.getUTCFullYear(),
+      normalizedTarget.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+
+  const endDate = new Date(originalDate);
+
+  endDate.setUTCDate(1);
+  endDate.setUTCFullYear(
+    normalizedTarget.getUTCFullYear(),
+    normalizedTarget.getUTCMonth(),
+    1,
+  );
+
+  endDate.setUTCDate(Math.min(originalDay, lastDayOfTargetMonth));
 
   return endDate;
 }
@@ -480,7 +523,9 @@ export async function reconcileWebhookRazorpayOrder(orderId) {
   }
 
   const billingPayment = await BillingPayment.findById(receipt);
-
+  if (billingPayment) {
+    await billingPayment.populate("plan", "code");
+  }
   if (!billingPayment) {
     throw createServiceError(
       "Billing payment for this Razorpay receipt was not found",
@@ -503,11 +548,23 @@ export async function reconcileWebhookRazorpayOrder(orderId) {
   }
 
   // Verify that this order belongs to this exact billing payment.
+  const expectedNotes = {
+    billingPaymentId: billingPayment._id.toString(),
+    organizationId: billingPayment.organization?.toString(),
+    planCode: billingPayment.plan?.code,
+    billingInterval: billingPayment.billingInterval,
+    paymentType: billingPayment.paymentType,
+  };
+
+  const notesMismatch = Object.entries(expectedNotes).some(
+    ([key, value]) => !value || razorpayOrder.notes?.[key] !== String(value),
+  );
+
   if (
     razorpayOrder.receipt !== billingPayment._id.toString() ||
-    razorpayOrder.notes?.billingPaymentId !== billingPayment._id.toString() ||
     razorpayOrder.amount !== billingPayment.amountPaise ||
-    razorpayOrder.currency !== billingPayment.currency
+    razorpayOrder.currency !== billingPayment.currency ||
+    notesMismatch
   ) {
     throw createServiceError(
       "Razorpay order details do not match",
