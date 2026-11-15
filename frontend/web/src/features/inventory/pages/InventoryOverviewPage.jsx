@@ -2,15 +2,37 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getUserOrganizations } from "../../organization/organizationService";
 import { getProducts, getProductVariants } from "../../products/productService";
-import { getVariantInventory, getLowStockInventory } from "../inventoryService";
+import {
+  getVariantInventory,
+  getLowStockInventory,
+  adjustStock,
+} from "../inventoryService";
 
 import "./inventory.css";
+
+const initialAdjustmentForm = {
+  type: "stock_in",
+  quantity: "",
+  reason: "",
+};
+
+function getAdjustmentError(error) {
+  return (
+    error.response?.data?.error?.message ||
+    error.response?.data?.message ||
+    error.message ||
+    "Unable to adjust stock."
+  );
+}
 
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
 export default function InventoryOverviewPage() {
   const [organizations, setOrganizations] = useState([]);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const selectedOrganization = organizations.find(
+    (item) => item.organization.id === selectedOrganizationId,
+  );
 
   const [inventoryItems, setInventoryItems] = useState([]);
   const [lowStockItems, setLowStockItems] = useState([]);
@@ -21,6 +43,142 @@ export default function InventoryOverviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isInventoryLoading, setIsInventoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjustmentItem, setAdjustmentItem] = useState(null);
+  const [adjustmentForm, setAdjustmentForm] = useState(initialAdjustmentForm);
+  const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  const [adjustmentError, setAdjustmentError] = useState("");
+  const [adjustmentSuccess, setAdjustmentSuccess] = useState("");
+
+  const canAdjustStock = ["owner", "manager"].includes(
+    selectedOrganization?.role,
+  );
+
+  function openAdjustmentModal(item) {
+    if (!canAdjustStock) return;
+
+    setAdjustmentItem(item);
+    setAdjustmentForm(initialAdjustmentForm);
+    setAdjustmentError("");
+    setAdjustmentSuccess("");
+    setIsAdjustmentOpen(true);
+  }
+
+  function closeAdjustmentModal() {
+    if (isAdjusting) return;
+
+    setIsAdjustmentOpen(false);
+    setAdjustmentItem(null);
+    setAdjustmentForm(initialAdjustmentForm);
+    setAdjustmentError("");
+    setAdjustmentSuccess("");
+  }
+
+  function handleAdjustmentFormChange(event) {
+    const { name, value } = event.target;
+
+    setAdjustmentForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+
+    setAdjustmentError("");
+    setAdjustmentSuccess("");
+  }
+
+  async function handleQuickAdjustment(event) {
+    event.preventDefault();
+
+    if (!canAdjustStock || !adjustmentItem) return;
+
+    const quantity = Number(adjustmentForm.quantity);
+    const reason = adjustmentForm.reason.trim();
+
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setAdjustmentError("Enter a valid non-negative quantity.");
+      return;
+    }
+
+    if (Math.abs(quantity * 1000 - Math.round(quantity * 1000)) > 1e-7) {
+      setAdjustmentError("Quantity can have at most 3 decimal places.");
+      return;
+    }
+
+    if (adjustmentForm.type !== "adjustment" && quantity <= 0) {
+      setAdjustmentError("Quantity must be greater than zero.");
+      return;
+    }
+
+    if (reason.length < 3 || reason.length > 500) {
+      setAdjustmentError("Reason must contain 3 to 500 characters.");
+      return;
+    }
+
+    try {
+      setIsAdjusting(true);
+      setAdjustmentError("");
+      setAdjustmentSuccess("");
+
+      const response = await adjustStock(
+        selectedOrganizationId,
+        adjustmentItem.product._id,
+        adjustmentItem.variant._id,
+        {
+          type: adjustmentForm.type,
+          quantity,
+          reason,
+        },
+      );
+
+      const updatedInventory = response?.data?.inventory;
+
+      if (!updatedInventory) {
+        throw new Error("Stock was adjusted, but the response was invalid.");
+      }
+
+      const updatedItem = {
+        ...adjustmentItem,
+        inventory: updatedInventory,
+        quantity: updatedInventory.quantity,
+        lowStockThreshold: updatedInventory.lowStockThreshold,
+        isLowStock:
+          updatedInventory.quantity <= updatedInventory.lowStockThreshold,
+      };
+
+      setInventoryItems((previous) =>
+        previous.map((item) =>
+          item.variant._id === adjustmentItem.variant._id ? updatedItem : item,
+        ),
+      );
+
+      setAdjustmentSuccess(response?.message || "Stock adjusted successfully.");
+
+      // Refresh the Low Stock Items section without affecting
+      // the successful adjustment if this secondary request fails.
+      try {
+        const lowStockResponse = await getLowStockInventory(
+          selectedOrganizationId,
+          1,
+          100,
+        );
+
+        setLowStockItems(lowStockResponse?.data?.inventory || []);
+      } catch {
+        // The main inventory table has already been updated.
+      }
+
+      setTimeout(() => {
+        setIsAdjustmentOpen(false);
+        setAdjustmentItem(null);
+        setAdjustmentForm(initialAdjustmentForm);
+        setAdjustmentSuccess("");
+      }, 700);
+    } catch (error) {
+      setAdjustmentError(getAdjustmentError(error));
+    } finally {
+      setIsAdjusting(false);
+    }
+  }
 
   // Load organizations and restore the previously selected organization.
   useEffect(() => {
@@ -190,10 +348,6 @@ export default function InventoryOverviewPage() {
 
   const lowStockCount = inventoryItems.filter((item) => item.isLowStock).length;
 
-  const selectedOrganization = organizations.find(
-    (item) => item.organization.id === selectedOrganizationId,
-  );
-
   if (isLoading) {
     return (
       <main className="inventory-page">
@@ -342,6 +496,7 @@ export default function InventoryOverviewPage() {
                       <th>Quantity</th>
                       <th>Low Stock At</th>
                       <th>Stock Status</th>
+                      {canAdjustStock && <th>Actions</th>}
                     </tr>
                   </thead>
 
@@ -370,6 +525,17 @@ export default function InventoryOverviewPage() {
                             {item.isLowStock ? "Low Stock" : "In Stock"}
                           </span>
                         </td>
+                        {canAdjustStock && (
+                          <td>
+                            <button
+                              type="button"
+                              className="inventory-quick-adjust-button"
+                              onClick={() => openAdjustmentModal(item)}
+                            >
+                              Adjust Stock
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -426,6 +592,132 @@ export default function InventoryOverviewPage() {
             )}
           </section>
         </>
+      )}
+      {isAdjustmentOpen && adjustmentItem && (
+        <div
+          className="inventory-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeAdjustmentModal();
+            }
+          }}
+        >
+          <section
+            className="inventory-quick-adjust-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-adjust-title"
+          >
+            <div className="inventory-modal-header">
+              <div>
+                <p className="inventory-eyebrow">STOCK CONTROL</p>
+                <h2 id="quick-adjust-title">Adjust Stock</h2>
+                <p>
+                  {adjustmentItem.product.name} · SKU:{" "}
+                  {adjustmentItem.variant.sku}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="inventory-modal-close"
+                onClick={closeAdjustmentModal}
+                disabled={isAdjusting}
+                aria-label="Close adjustment modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="inventory-modal-current-stock">
+              <span>Current Quantity</span>
+              <strong>{adjustmentItem.quantity}</strong>
+              <span>Low Stock At: {adjustmentItem.lowStockThreshold}</span>
+            </div>
+
+            <form
+              className="inventory-quick-adjust-form"
+              onSubmit={handleQuickAdjustment}
+            >
+              {adjustmentError && (
+                <div className="inventory-alert" role="alert">
+                  {adjustmentError}
+                </div>
+              )}
+
+              {adjustmentSuccess && (
+                <div className="inventory-success" role="status">
+                  {adjustmentSuccess}
+                </div>
+              )}
+
+              <label>
+                Adjustment Type
+                <select
+                  name="type"
+                  value={adjustmentForm.type}
+                  onChange={handleAdjustmentFormChange}
+                  disabled={isAdjusting}
+                >
+                  <option value="stock_in">Stock In</option>
+                  <option value="stock_out">Stock Out</option>
+                  <option value="adjustment">Set Actual Quantity</option>
+                </select>
+              </label>
+
+              <label>
+                {adjustmentForm.type === "adjustment"
+                  ? "Actual Stock Quantity"
+                  : "Quantity"}
+                <input
+                  type="number"
+                  name="quantity"
+                  min="0"
+                  max="1000000000"
+                  step="0.001"
+                  value={adjustmentForm.quantity}
+                  onChange={handleAdjustmentFormChange}
+                  placeholder="Enter quantity"
+                  required
+                  disabled={isAdjusting}
+                />
+              </label>
+
+              <label>
+                Reason
+                <textarea
+                  name="reason"
+                  value={adjustmentForm.reason}
+                  onChange={handleAdjustmentFormChange}
+                  placeholder="Enter the reason for this adjustment"
+                  minLength={3}
+                  maxLength={500}
+                  required
+                  disabled={isAdjusting}
+                />
+              </label>
+
+              <div className="inventory-quick-adjust-actions">
+                <button
+                  type="button"
+                  className="inventory-secondary-button"
+                  onClick={closeAdjustmentModal}
+                  disabled={isAdjusting}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="inventory-primary-button"
+                  disabled={isAdjusting}
+                >
+                  {isAdjusting ? "Adjusting..." : "Confirm Adjustment"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       )}
     </main>
   );

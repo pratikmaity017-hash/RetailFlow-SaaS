@@ -755,3 +755,212 @@
     background-position: -100% 0;
   }
 }
+
+/* Quick Stock Adjustment Modal */
+
+.inventory-quick-adjust-button {
+  padding: 8px 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inventory-quick-adjust-button:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.inventory-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.55);
+  overflow-y: auto;
+}
+
+.inventory-quick-adjust-modal {
+  width: 100%;
+  max-width: 500px;
+  max-height: calc(100vh - 40px);
+  padding: 25px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+}
+
+.inventory-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.inventory-modal-header h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 21px;
+}
+
+.inventory-modal-header p:last-child {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inventory-modal-close {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 23px;
+  cursor: pointer;
+}
+
+.inventory-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inventory-modal-current-stock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.inventory-modal-current-stock span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.inventory-modal-current-stock strong {
+  color: #172033;
+  font-size: 23px;
+}
+
+.inventory-quick-adjust-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inventory-quick-adjust-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inventory-quick-adjust-form input,
+.inventory-quick-adjust-form select,
+.inventory-quick-adjust-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.inventory-quick-adjust-form input:focus,
+.inventory-quick-adjust-form select:focus,
+.inventory-quick-adjust-form textarea:focus {
+  border-color: #647de8;
+  box-shadow: 0 0 0 3px rgba(100, 125, 232, 0.12);
+}
+
+.inventory-quick-adjust-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.inventory-quick-adjust-form :disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.inventory-quick-adjust-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.inventory-quick-adjust-actions button {
+  min-height: 42px;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inventory-quick-adjust-actions .inventory-primary-button {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.inventory-quick-adjust-actions .inventory-primary-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.inventory-quick-adjust-actions .inventory-secondary-button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.inventory-success {
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 13px;
+}
+
+@media (max-width: 500px) {
+  .inventory-quick-adjust-modal {
+    padding: 19px;
+  }
+
+  .inventory-modal-current-stock {
+    flex-wrap: wrap;
+  }
+
+  .inventory-quick-adjust-actions {
+    flex-direction: column-reverse;
+  }
+
+  .inventory-quick-adjust-actions button {
+    width: 100%;
+  }
+}
