@@ -5,10 +5,8 @@ import BusinessCategory from "../models/business-category.model.js";
 import Feature from "../models/feature.model.js";
 import BusinessCategoryFeature from "../models/business-category-feature.model.js";
 
-const categorySlug = "general-retail";
-
-const featureCodes = [
-  // Core Features
+// Map only implemented core retail features for now.
+const coreFeatureCodes = [
   "product_management",
   "inventory_management",
   "sales_management",
@@ -17,12 +15,6 @@ const featureCodes = [
   "purchase_management",
   "sales_reports",
   "returns_management",
-
-  // Advanced Features
-  "advanced_analytics",
-  "warehouse_management",
-  "product_exchange",
-  "advanced_inventory_reports",
 ];
 
 async function seedBusinessCategoryFeatures() {
@@ -32,54 +24,61 @@ async function seedBusinessCategoryFeatures() {
 
   console.log("MongoDB connected.");
 
-  const category = await BusinessCategory.findOne({
-    slug: categorySlug,
+  // Get all active business categories.
+  const categories = await BusinessCategory.find({
     status: "active",
-  }).select("_id name");
+  }).select("_id name slug");
 
-  if (!category) {
-    throw new Error(`Active business category not found: ${categorySlug}`);
+  if (categories.length === 0) {
+    throw new Error("No active business categories found.");
   }
 
+  // Get all required active core features.
   const features = await Feature.find({
-    code: { $in: featureCodes },
+    code: { $in: coreFeatureCodes },
     status: "active",
   }).select("_id code");
 
   const foundCodes = new Set(features.map((feature) => feature.code));
 
-  const missingCodes = featureCodes.filter((code) => !foundCodes.has(code));
+  const missingCodes = coreFeatureCodes.filter((code) => !foundCodes.has(code));
 
   if (missingCodes.length > 0) {
     throw new Error(
-      `Features not found or inactive: ${missingCodes.join(", ")}`,
+      `Core features not found or inactive: ${missingCodes.join(", ")}`,
     );
   }
 
-  const operations = features.map((feature) => ({
-    updateOne: {
-      filter: {
-        businessCategory: category._id,
-        feature: feature._id,
-      },
-      update: {
-        $setOnInsert: {
+  // Create a mapping for every active category and core feature.
+  const operations = categories.flatMap((category) =>
+    features.map((feature) => ({
+      updateOne: {
+        filter: {
           businessCategory: category._id,
           feature: feature._id,
-          status: "active",
         },
+        update: {
+          $set: {
+            status: "active",
+          },
+          $setOnInsert: {
+            businessCategory: category._id,
+            feature: feature._id,
+          },
+        },
+        upsert: true,
       },
-      upsert: true,
-    },
-  }));
+    })),
+  );
 
   const result = await BusinessCategoryFeature.bulkWrite(operations);
 
   console.log("\n---------- SEED RESULT ----------");
-  console.log(`Category: ${category.name}`);
-  console.log(`Features mapped: ${features.length}`);
-  console.log(`Inserted: ${result.upsertedCount}`);
-  console.log(`Already existed: ${features.length - result.upsertedCount}`);
+  console.log(`Active categories: ${categories.length}`);
+  console.log(`Core features: ${features.length}`);
+  console.log(`Total mappings checked: ${operations.length}`);
+  console.log(`Inserted mappings: ${result.upsertedCount}`);
+  console.log(`Reactivated/updated mappings: ${result.modifiedCount}`);
 
   console.log("\nBusiness Category Feature Seed Completed.");
 }
