@@ -3,6 +3,7 @@ import WebhookEvent from "../models/webhook-event.model.js";
 import {
   processCapturedPaymentFromWebhook,
   processFailedPaymentFromWebhook,
+  reconcileWebhookRazorpayOrder,
 } from "./subscription-payment.service.js";
 
 import { fetchRazorpayOrderPayments } from "./razorpay.service.js";
@@ -41,6 +42,8 @@ async function processPaymentEvent(eventType, payload) {
         "WEBHOOK_FAILED_PAYMENT_DETAILS_MISSING",
       );
     }
+
+    await reconcileWebhookRazorpayOrder(payment.order_id);
 
     await processFailedPaymentFromWebhook({
       orderId: payment.order_id,
@@ -102,6 +105,8 @@ async function processPaymentEvent(eventType, payload) {
       "WEBHOOK_PAYMENT_DETAILS_MISSING",
     );
   }
+
+  await reconcileWebhookRazorpayOrder(payment.order_id);
 
   const result = await processCapturedPaymentFromWebhook({
     orderId: payment.order_id,

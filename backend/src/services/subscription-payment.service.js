@@ -494,16 +494,17 @@ export async function reconcileWebhookRazorpayOrder(orderId) {
 
   // Verify that this order belongs to this exact billing payment.
   if (
+    razorpayOrder.receipt !== billingPayment._id.toString() ||
+    razorpayOrder.notes?.billingPaymentId !== billingPayment._id.toString() ||
     razorpayOrder.amount !== billingPayment.amountPaise ||
     razorpayOrder.currency !== billingPayment.currency
   ) {
     throw createServiceError(
-      "Razorpay order amount or currency does not match",
+      "Razorpay order details do not match",
       409,
       "RAZORPAY_ORDER_DETAILS_MISMATCH",
     );
   }
-
   const savedPayment = await BillingPayment.findOneAndUpdate(
     {
       _id: billingPayment._id,

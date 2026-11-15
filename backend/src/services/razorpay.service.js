@@ -212,6 +212,8 @@ export async function fetchRazorpayOrder(orderId) {
 
   return {
     id: result.id,
+    receipt: result.receipt,
+    notes: result.notes,
     status: result.status,
     attempts: result.attempts,
     amount: result.amount,
