@@ -3,6 +3,7 @@ import Product from "../models/product.model.js";
 import Membership from "../models/membership.model.js";
 import Supplier from "../models/supplier.model.js";
 import Customer from "../models/customer.model.js";
+import OrganizationInvitation from "../models/organization-invitation.model.js";
 
 import { createServiceError } from "../utils/service-error.util.js";
 
@@ -30,34 +31,44 @@ export async function getOrganizationSubscriptionUsage({ organizationId }) {
     );
   }
 
-  const [products, staff, suppliers, customers] = await Promise.all([
-    Product.countDocuments({
-      organization: organizationId,
-       status: "active",
-    }),
+  const now = new Date();
 
-    Membership.countDocuments({
-      organization: organizationId,
-      role: { $in: ["manager", "sales_staff"] },
-      status: "active",
-    }),
+  const [products, activeStaff, pendingInvitations, suppliers, customers] =
+    await Promise.all([
+      Product.countDocuments({
+        organization: organizationId,
+        status: "active",
+      }),
 
-    Supplier.countDocuments({
-      organization: organizationId,
-      status: "active",
-    }),
+      Membership.countDocuments({
+        organization: organizationId,
+        role: { $in: ["manager", "sales_staff"] },
+        status: "active",
+      }),
 
-    Customer.countDocuments({
-      organization: organizationId,
-      status: "active",
-    }),
-  ]);
+      OrganizationInvitation.countDocuments({
+        organization: organizationId,
+        role: { $in: ["manager", "sales_staff"] },
+        status: "pending",
+        expiresAt: { $gt: now },
+      }),
+
+      Supplier.countDocuments({
+        organization: organizationId,
+        status: "active",
+      }),
+
+      Customer.countDocuments({
+        organization: organizationId,
+        status: "active",
+      }),
+    ]);
 
   const limits = mapToObject(subscription.plan.entitlements?.limits);
 
   const usage = {
     products,
-    staff,
+    staff: activeStaff + pendingInvitations,
     suppliers,
     customers,
   };
