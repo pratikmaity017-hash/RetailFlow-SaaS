@@ -47,6 +47,7 @@ export async function getOrganizationSubscriptionUsage({ organizationId }) {
 
     Customer.countDocuments({
       organization: organizationId,
+      status: "active",
     }),
   ]);
 
