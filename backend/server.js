@@ -43,9 +43,19 @@ const shutdown = async (signal) => {
     if (server) {
       await new Promise((resolve, reject) => {
         server.close((error) => {
-          if (error) reject(error);
-          else resolve();
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
         });
+
+        // Close idle keep-alive connections.
+        server.closeIdleConnections?.();
+
+        // Force-close remaining HTTP connections.
+        server.closeAllConnections?.();
       });
     }
 
