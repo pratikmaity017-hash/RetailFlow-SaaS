@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
+import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 import {
   authorize,
   authorizeVariantStatusChange,
@@ -25,12 +26,12 @@ import {
 const router = Router({ mergeParams: true });
 
 // Create a variant for a product.
-// Create a variant for a product.
 router.post(
   "/",
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager"),
   validate(createProductVariantSchema),
   createProductVariantController,
@@ -42,15 +43,18 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager", "sales_staff"),
   getProductVariantsController,
 );
 
+// Get a single product variant.
 router.get(
   "/:variantId",
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager", "sales_staff"),
   getProductVariantByIdController,
 );
@@ -61,17 +65,20 @@ router.put(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner", "manager"),
   validate(updateProductVariantSchema),
   authorizeVariantStatusChange,
   updateProductVariantController,
 );
 
+// Deactivate a product variant.
 router.patch(
   "/:variantId/deactivate",
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("product_management"),
   authorize("owner"),
   deactivateProductVariantController,
 );

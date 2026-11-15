@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
+import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
@@ -21,6 +22,7 @@ router.post(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("sales_management"),
   authorize("owner", "manager", "sales_staff"),
   validate(createPaymentSchema),
   createPaymentController,
@@ -31,6 +33,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("sales_management"),
   authorize("owner", "manager", "sales_staff"),
   getSalePaymentsController,
 );
@@ -40,6 +43,7 @@ router.get(
   authenticate,
   requireEmailVerified,
   requireOrganization,
+  requireFeature("sales_management"),
   authorize("owner", "manager", "sales_staff"),
   getPaymentByIdController,
 );
