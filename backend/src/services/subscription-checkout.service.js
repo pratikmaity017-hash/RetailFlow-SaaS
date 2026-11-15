@@ -210,6 +210,17 @@ export async function createSubscriptionCheckout({
         existingPendingPayment.orderCreationStatus,
       );
 
+    if (
+      existingPendingPayment.plan?.code !== requestedPlan.code ||
+      existingPendingPayment.billingInterval !== billingInterval
+    ) {
+      throw createServiceError(
+        "A pending checkout already exists with different plan details. Recover or resolve it before starting another checkout.",
+        409,
+        "PENDING_CHECKOUT_DETAILS_MISMATCH",
+      );
+    }
+
     if (!canRecover) {
       throw createServiceError(
         "A payment is already pending for this organization",

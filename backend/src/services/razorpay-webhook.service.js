@@ -77,6 +77,7 @@ async function claimExistingWebhookEvent({ eventId, processingToken }) {
         processingStartedAt: now,
         processingToken,
         failureReason: null,
+        nextRetryAt: null,
       },
       $inc: {
         retryCount: 1,

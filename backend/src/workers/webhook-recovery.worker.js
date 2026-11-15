@@ -1,7 +1,5 @@
 import { recoverWebhookEvents } from "../services/razorpay-webhook.service.js";
 
-let isRunning = false;
-
 const WEBHOOK_RECOVERY_INTERVAL_MS = 60 * 1000;
 const WEBHOOK_RECOVERY_BATCH_SIZE = 10;
 

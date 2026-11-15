@@ -33,16 +33,26 @@ const shutdown = async (signal) => {
   console.log(`${signal} received. Starting graceful shutdown...`);
 
   try {
-    // Stop the worker and wait for its active recovery to finish.
+    // 1. Stop webhook recovery worker.
     if (stopWebhookRecoveryWorker) {
       await stopWebhookRecoveryWorker();
       stopWebhookRecoveryWorker = null;
     }
 
-    // Close the HTTP server.
+    // 2. Close HTTP server and wait for active connections.
     if (server) {
       await new Promise((resolve, reject) => {
+        const forceCloseTimer = setTimeout(() => {
+          console.warn(
+            "Graceful shutdown timeout reached. Force-closing HTTP connections.",
+          );
+
+          server.closeAllConnections?.();
+        }, 10_000);
+
         server.close((error) => {
+          clearTimeout(forceCloseTimer);
+
           if (error) {
             reject(error);
             return;
@@ -53,13 +63,14 @@ const shutdown = async (signal) => {
 
         // Close idle keep-alive connections.
         server.closeIdleConnections?.();
-
-        // Force-close remaining HTTP connections.
-        server.closeAllConnections?.();
       });
     }
 
-    // Disconnect MongoDB only after worker shutdown.
+    console.log("HTTP server closed.");
+
+    console.log("Disconnecting MongoDB...");
+
+    // 3. Disconnect MongoDB.
     await mongoose.disconnect();
 
     console.log("MongoDB disconnected.");

@@ -232,6 +232,18 @@ export async function createSubscriptionRenewal({
     await heartbeat.assertOwnership();
 
     if (existingPendingPayment) {
+      if (
+        existingPendingPayment.paymentType === "renewal" &&
+        (String(existingPendingPayment.plan) !==
+          String(subscription.plan._id) ||
+          existingPendingPayment.billingInterval !== billingInterval)
+      ) {
+        throw createServiceError(
+          "A pending renewal checkout already exists with different billing details. Recover or resolve it before starting another renewal.",
+          409,
+          "PENDING_RENEWAL_DETAILS_MISMATCH",
+        );
+      }
       const canRecoverOrder =
         existingPendingPayment.paymentType === "renewal" &&
         existingPendingPayment.status === "pending" &&
