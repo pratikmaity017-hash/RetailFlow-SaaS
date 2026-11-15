@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 import { getUserOrganizations } from "../../organization/organizationService";
 import { getProducts, getProductVariants } from "../../products/productService";
 import {
@@ -28,6 +28,7 @@ function getAdjustmentError(error) {
 const ORGANIZATION_STORAGE_KEY = "retailflow_selected_organization_id";
 
 export default function InventoryOverviewPage() {
+  const navigate = useNavigate();
   const [organizations, setOrganizations] = useState([]);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const selectedOrganization = organizations.find(
@@ -381,6 +382,13 @@ export default function InventoryOverviewPage() {
             </div>
           )}
         </div>
+        <button
+          type="button"
+          className="inventory-secondary-button"
+          onClick={() => navigate("/inventory/adjustments")}
+        >
+          View Stock History
+        </button>
       </header>
 
       {organizations.length > 1 && (
