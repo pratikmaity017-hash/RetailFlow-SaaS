@@ -218,13 +218,55 @@ async function activateSubscription({
       const subscription = await Subscription.findOne({
         _id: currentPayment.subscription,
         organization: organizationId,
-      }).session(session);
+      })
+        .populate("plan", "code")
+        .session(session);
 
       if (!subscription) {
         throw createServiceError(
           "Organization subscription was not found",
           404,
           "SUBSCRIPTION_NOT_FOUND",
+        );
+      }
+
+      if (!["initial", "renewal"].includes(currentPayment.paymentType)) {
+        throw createServiceError(
+          "Invalid billing payment type",
+          409,
+          "INVALID_BILLING_PAYMENT_TYPE",
+        );
+      }
+
+      if (!["monthly", "yearly"].includes(currentPayment.billingInterval)) {
+        throw createServiceError(
+          "Invalid billing interval",
+          409,
+          "INVALID_BILLING_INTERVAL",
+        );
+      }
+
+      // Initial checkout must still belong to a Free subscription.
+      if (
+        currentPayment.paymentType === "initial" &&
+        subscription.plan?.code !== "free"
+      ) {
+        throw createServiceError(
+          "Initial payment cannot replace an existing paid subscription",
+          409,
+          "INITIAL_PAYMENT_SUBSCRIPTION_MISMATCH",
+        );
+      }
+
+      // Renewal must belong to the subscription's current plan.
+      if (
+        currentPayment.paymentType === "renewal" &&
+        String(currentPayment.plan) !== String(subscription.plan?._id)
+      ) {
+        throw createServiceError(
+          "Renewal payment plan does not match the current subscription plan",
+          409,
+          "RENEWAL_PAYMENT_PLAN_MISMATCH",
         );
       }
 

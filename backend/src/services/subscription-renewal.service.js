@@ -300,21 +300,34 @@ export async function createSubscriptionRenewal({
       );
     }
 
-    const [billingPayment] = await BillingPayment.create([
-      {
-        organization: organizationId,
-        subscription: subscription._id,
-        plan: subscription.plan._id,
-        paymentType: "renewal",
-        amountPaise: selectedPrice.amountPaise,
-        currency: selectedPrice.currency || "INR",
-        billingInterval,
-        status: "pending",
-        orderCreationStatus: "creating",
-        gateway: "razorpay",
-      },
-    ]);
+    let billingPayment;
 
+    try {
+      [billingPayment] = await BillingPayment.create([
+        {
+          organization: organizationId,
+          subscription: subscription._id,
+          plan: subscription.plan._id,
+          paymentType: "renewal",
+          amountPaise: selectedPrice.amountPaise,
+          currency: selectedPrice.currency || "INR",
+          billingInterval,
+          status: "pending",
+          orderCreationStatus: "creating",
+          gateway: "razorpay",
+        },
+      ]);
+    } catch (error) {
+      if (error.code === 11000 && error.keyPattern?.subscription === 1) {
+        throw createServiceError(
+          "A payment is already being created for this subscription. Please recover or resolve it before starting another renewal.",
+          409,
+          "RENEWAL_ALREADY_PENDING",
+        );
+      }
+
+      throw error;
+    }
     let razorpayOrder;
 
     try {

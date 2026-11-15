@@ -149,6 +149,24 @@ billingPaymentSchema.index({
   createdAt: -1,
 });
 
+billingPaymentSchema.index(
+  { subscription: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: {
+        $in: [
+          "pending",
+          "authorized",
+          "cancellation_pending",
+          "refund_pending",
+        ],
+      },
+    },
+    name: "uniq_unresolved_payment_per_subscription",
+  },
+);
+
 const BillingPayment = mongoose.model("BillingPayment", billingPaymentSchema);
 
 export default BillingPayment;
