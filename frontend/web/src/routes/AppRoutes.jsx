@@ -18,12 +18,13 @@ import InventoryOverviewPage from "../features/inventory/pages/InventoryOverview
 import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage";
 
 import AppLayout from "../layouts/AppLayout";
+import AppLoader from "../shared/components/AppLoader";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="route-loading">Loading RetailFlow...</div>;
+    return <AppLoader />;
   }
 
   return isAuthenticated ? children : <Navigate to="/login" replace />;
@@ -33,7 +34,7 @@ function GuestRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="route-loading">Loading RetailFlow...</div>;
+    return <AppLoader />;
   }
 
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
