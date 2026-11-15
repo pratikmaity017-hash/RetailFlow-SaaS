@@ -1,4 +1,5 @@
 import { recoverWebhookEvents } from "../services/razorpay-webhook.service.js";
+import { recoverPendingRenewalRefunds } from "../services/subscription-refund.service.js";
 
 const WEBHOOK_RECOVERY_INTERVAL_MS = 60 * 1000;
 const WEBHOOK_RECOVERY_BATCH_SIZE = 10;
@@ -22,6 +23,18 @@ async function runWebhookRecovery() {
       }
     } catch (error) {
       console.error("Webhook recovery worker error:", error.message);
+    }
+
+    try {
+      const refundResult = await recoverPendingRenewalRefunds({
+        batchSize: WEBHOOK_RECOVERY_BATCH_SIZE,
+      });
+
+      if (refundResult.checked > 0) {
+        console.log("Refund recovery completed:", refundResult);
+      }
+    } catch (error) {
+      console.error("Refund recovery worker error:", error.message);
     } finally {
       activeRun = null;
     }

@@ -11,6 +11,7 @@ import {
 } from "./razorpay.service.js";
 
 import { verifyRazorpayPaymentSignature } from "../utils/razorpay-signature.js";
+import { processCancelledRenewalRefund } from "./subscription-refund.service.js";
 
 function createServiceError(message, statusCode, code) {
   const error = new Error(message);
@@ -370,6 +371,106 @@ async function activateSubscription({
   return result;
 }
 
+async function markStaleRenewalForRefund({ billingPayment, paymentId }) {
+  const updatedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: billingPayment._id,
+      organization: billingPayment.organization,
+      paymentType: "renewal",
+      status: { $in: ["pending", "authorized"] },
+      $or: [
+        { razorpayPaymentId: null },
+        { razorpayPaymentId: { $exists: false } },
+        { razorpayPaymentId: paymentId },
+      ],
+    },
+    {
+      $set: {
+        status: "refund_pending",
+        razorpayPaymentId: paymentId,
+        paidAt: new Date(),
+        refundStatus: "pending",
+        failureReason: "STALE_RENEWAL_PAYMENT_CAPTURED",
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!updatedPayment) {
+    const latestPayment = await BillingPayment.findById(billingPayment._id);
+
+    if (
+      ["refund_pending", "refunded"].includes(latestPayment?.status) &&
+      latestPayment.razorpayPaymentId === paymentId
+    ) {
+      return {
+        verified: true,
+        subscriptionActivated: false,
+        refundRequired: latestPayment.status !== "refunded",
+        refundStatus: latestPayment.status,
+        paymentId,
+        billingPaymentId: latestPayment._id,
+      };
+    }
+
+    throw createServiceError(
+      "Stale renewal payment changed during refund processing.",
+      409,
+      "STALE_RENEWAL_REFUND_CONFLICT",
+    );
+  }
+
+  return {
+    verified: true,
+    subscriptionActivated: false,
+    refundRequired: true,
+    refundStatus: "pending",
+    paymentId,
+    billingPaymentId: updatedPayment._id,
+  };
+}
+
+async function activateOrHandleStaleRenewal({
+  organizationId,
+  billingPayment,
+  paymentId,
+}) {
+  try {
+    return await activateSubscription({
+      organizationId,
+      billingPayment,
+      paymentId,
+    });
+  } catch (error) {
+    if (
+      error.code !== "STALE_RENEWAL_PAYMENT" ||
+      billingPayment.paymentType !== "renewal"
+    ) {
+      throw error;
+    }
+
+    const result = await markStaleRenewalForRefund({
+      billingPayment,
+      paymentId,
+    });
+
+    if (result.refundRequired) {
+      const refundResult = await processCancelledRenewalRefund({
+        billingPaymentId: result.billingPaymentId,
+      });
+
+      return {
+        ...result,
+        refundResult,
+      };
+    }
+
+    return result;
+  }
+}
+
 export async function verifySubscriptionPayment({
   organizationId,
   orderId,
@@ -468,7 +569,7 @@ export async function verifySubscriptionPayment({
     );
   }
 
-  return activateSubscription({
+  return activateOrHandleStaleRenewal({
     organizationId,
     billingPayment,
     paymentId,
@@ -574,10 +675,10 @@ export async function recoverSubscriptionPayment({
 
   const capturedPayment = matchingPayments[0];
 
-  return activateSubscription({
+  return activateOrHandleStaleRenewal({
     organizationId,
     billingPayment,
-    paymentId: capturedPayment.id,
+    paymentId,
   });
 }
 
@@ -847,11 +948,25 @@ export async function processCapturedPaymentFromWebhook({
     };
   }
 
-  return activateSubscription({
-    organizationId: billingPayment.organization,
-    billingPayment,
-    paymentId,
-  });
+  try {
+    return await activateSubscription({
+      organizationId: billingPayment.organization,
+      billingPayment,
+      paymentId,
+    });
+  } catch (error) {
+    if (
+      error.code === "STALE_RENEWAL_PAYMENT" &&
+      billingPayment.paymentType === "renewal"
+    ) {
+      return markStaleRenewalForRefund({
+        billingPayment,
+        paymentId,
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function processFailedPaymentFromWebhook({

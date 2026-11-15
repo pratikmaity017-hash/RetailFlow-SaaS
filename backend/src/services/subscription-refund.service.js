@@ -227,3 +227,59 @@ export async function processRefundWebhook({ eventType, refund }) {
     refundId: refund.id,
   };
 }
+
+export async function recoverPendingRenewalRefunds({ batchSize = 10 } = {}) {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
+
+  const candidates = await BillingPayment.find({
+    paymentType: "renewal",
+    status: "refund_pending",
+    $or: [
+      {
+        refundStatus: { $in: ["pending", "failed"] },
+        updatedAt: { $lte: staleBefore },
+      },
+      {
+        refundStatus: "processing",
+        refundProcessingAt: { $lte: staleBefore },
+      },
+    ],
+  })
+    .select("_id")
+    .sort({ updatedAt: 1 })
+    .limit(batchSize)
+    .lean();
+
+  let processed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    try {
+      const result = await processCancelledRenewalRefund({
+        billingPaymentId: candidate._id,
+      });
+
+      if (result.refunded || result.refundStatus === "processed") {
+        processed += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
+      failed += 1;
+
+      console.error(
+        `Refund recovery failed for payment ${candidate._id}:`,
+        error.message,
+      );
+    }
+  }
+
+  return {
+    checked: candidates.length,
+    processed,
+    failed,
+    skipped,
+  };
+}
