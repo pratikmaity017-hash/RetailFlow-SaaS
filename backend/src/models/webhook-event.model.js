@@ -47,6 +47,12 @@ const webhookEventSchema = new mongoose.Schema(
       select: false,
     },
 
+    nextRetryAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
     failureReason: {
       type: String,
       trim: true,
@@ -71,7 +77,12 @@ const webhookEventSchema = new mongoose.Schema(
 
 webhookEventSchema.index({
   status: 1,
-  createdAt: 1,
+  processingStartedAt: 1,
+});
+
+webhookEventSchema.index({
+  status: 1,
+  nextRetryAt: 1,
 });
 
 const WebhookEvent = mongoose.model("WebhookEvent", webhookEventSchema);
