@@ -1,13 +1,26 @@
 import Supplier from "../models/supplier.model.js";
+import { withSubscriptionLimit } from "./subscription-limit.service.js";
 
 export async function createSupplier({ organizationId, userId, supplierData }) {
-  const supplier = await Supplier.create({
-    ...supplierData,
-    organization: organizationId,
-    createdBy: userId,
-  });
+  return withSubscriptionLimit({
+    organizationId,
+    resource: "suppliers",
 
-  return supplier;
+    operation: async (session) => {
+      const [supplier] = await Supplier.create(
+        [
+          {
+            ...supplierData,
+            organization: organizationId,
+            createdBy: userId,
+          },
+        ],
+        { session },
+      );
+
+      return supplier;
+    },
+  });
 }
 
 export async function listSuppliers({ organizationId, query }) {
