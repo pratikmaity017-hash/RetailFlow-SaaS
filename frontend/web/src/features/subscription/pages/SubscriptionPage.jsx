@@ -5,9 +5,12 @@ import {
   getSubscriptionUsage,
   getSubscriptionPayments,
   changeSubscriptionPlan,
+  createSubscriptionCheckout,
+  verifySubscriptionPayment,
   cancelSubscription,
   resumeSubscription,
 } from "../subscriptionService";
+import { loadRazorpayCheckout } from "../razorpayCheckout";
 import { getOrganizationContext } from "../../organization/organizationService";
 
 import "./subscription.css";
@@ -87,6 +90,8 @@ export default function SubscriptionPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [selectedBillingInterval, setSelectedBillingInterval] =
+    useState("monthly");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -129,6 +134,139 @@ export default function SubscriptionPage() {
     } catch (err) {
       setActionError(
         err.response?.data?.message || "Failed to resume subscription.",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleUpgradePlan(plan) {
+    if (!isOwner) return;
+
+    const organizationId = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
+
+    if (!organizationId) {
+      setActionError("Please select an organization first.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setActionMessage("");
+
+      // Create a checkout order through our backend.
+      const response = await createSubscriptionCheckout(
+        organizationId,
+        plan.code,
+        selectedBillingInterval,
+      );
+
+      const checkoutData = response?.data?.checkout;
+
+      if (
+        !checkoutData?.keyId ||
+        !checkoutData?.orderId ||
+        !checkoutData?.amount
+      ) {
+        throw new Error("Invalid checkout information received.");
+      }
+
+      // Load Razorpay Checkout.js.
+      await loadRazorpayCheckout();
+
+      const razorpay = new window.Razorpay({
+        key: checkoutData.keyId,
+        amount: checkoutData.amount,
+        currency: checkoutData.currency,
+        name: "RetailFlow",
+        description: `${checkoutData.plan?.name || plan.name} Subscription`,
+        order_id: checkoutData.orderId,
+
+        handler: async function (paymentResponse) {
+          try {
+            setActionLoading(true);
+
+            await verifySubscriptionPayment(organizationId, {
+              orderId: paymentResponse.razorpay_order_id,
+              paymentId: paymentResponse.razorpay_payment_id,
+              signature: paymentResponse.razorpay_signature,
+            });
+
+            window.location.reload();
+          } catch (err) {
+            setActionError(
+              err.response?.data?.message ||
+                err.message ||
+                "Payment verification failed. Please contact support.",
+            );
+            setActionLoading(false);
+          }
+        },
+
+        modal: {
+          ondismiss: function () {
+            setActionLoading(false);
+          },
+        },
+      });
+
+      razorpay.on("payment.failed", function (paymentResponse) {
+        setActionError(
+          paymentResponse.error?.description ||
+            "Payment failed. Please try again.",
+        );
+        setActionLoading(false);
+      });
+
+      razorpay.open();
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to start subscription checkout.",
+      );
+      setActionLoading(false);
+    }
+  }
+
+  async function handleChangePlan(plan) {
+    if (!isOwner) return;
+
+    const organizationId = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
+
+    if (!organizationId) {
+      setActionError("Please select an organization first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Schedule a change to ${plan.name} (${selectedBillingInterval})? This will take effect at the end of your current billing period.`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setActionMessage("");
+
+      await changeSubscriptionPlan(
+        organizationId,
+        plan.code,
+        selectedBillingInterval,
+      );
+
+      setActionMessage(
+        "Plan change scheduled successfully. It will take effect at the end of your current billing period.",
+      );
+
+      window.location.reload();
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to schedule plan change.",
       );
     } finally {
       setActionLoading(false);
@@ -350,46 +488,127 @@ export default function SubscriptionPage() {
           <p>Explore the subscription plans available for your business.</p>
         </div>
 
+        <div className="subscription-billing-selector">
+          <span>Billing Interval</span>
+
+          <div>
+            <button
+              type="button"
+              className={
+                selectedBillingInterval === "monthly" ? "is-selected" : ""
+              }
+              onClick={() => setSelectedBillingInterval("monthly")}
+            >
+              Monthly
+            </button>
+
+            <button
+              type="button"
+              className={
+                selectedBillingInterval === "yearly" ? "is-selected" : ""
+              }
+              onClick={() => setSelectedBillingInterval("yearly")}
+            >
+              Yearly
+            </button>
+          </div>
+        </div>
+
         <div className="subscription-plans-grid">
-          {plans.map((plan) => (
-            <article className="subscription-plan-card" key={plan.id}>
-              <div>
-                <span className="subscription-label">{plan.code}</span>
-                <h3>{plan.name}</h3>
-                <p>{plan.description}</p>
-              </div>
+          {plans.map((plan) => {
+            const isCurrentPlan = currentPlan?.code === plan.code;
+            const isCurrentInterval =
+              currentSubscription?.billingInterval === selectedBillingInterval;
 
-              <div className="subscription-plan-card__prices">
+            const isCurrentSelection = isCurrentPlan && isCurrentInterval;
+            const isFree = plan.code === "free";
+
+            const selectedPrice = plan.prices?.[selectedBillingInterval];
+            const hasPrice =
+              isFree ||
+              (typeof selectedPrice?.amountPaise === "number" &&
+                selectedPrice.amountPaise > 0);
+
+            const canChangePlan =
+              isOwner &&
+              plan.isActive &&
+              !isFree &&
+              hasPrice &&
+              !isCurrentSelection &&
+              !cancellationScheduled &&
+              !currentSubscription?.pendingChange;
+
+            return (
+              <article className="subscription-plan-card" key={plan.id}>
                 <div>
-                  <strong>
-                    {formatPrice(
-                      plan.prices?.monthly?.amountPaise,
-                      plan.prices?.monthly?.currency,
-                    )}
-                  </strong>
-                  <span>/ month</span>
+                  <span className="subscription-label">{plan.code}</span>
+                  <h3>{plan.name}</h3>
+                  <p>{plan.description}</p>
                 </div>
 
-                <div>
-                  <strong>
-                    {formatPrice(
-                      plan.prices?.yearly?.amountPaise,
-                      plan.prices?.yearly?.currency,
-                    )}
-                  </strong>
-                  <span>/ year</span>
-                </div>
-              </div>
+                <div className="subscription-plan-card__prices">
+                  <div>
+                    <strong>
+                      {formatPrice(
+                        plan.prices?.monthly?.amountPaise,
+                        plan.prices?.monthly?.currency,
+                      )}
+                    </strong>
+                    <span>/ month</span>
+                  </div>
 
-              <span
-                className={`subscription-plan-card__availability ${
-                  plan.isActive ? "is-active" : "is-inactive"
-                }`}
-              >
-                {plan.isActive ? "Available" : "Unavailable"}
-              </span>
-            </article>
-          ))}
+                  <div>
+                    <strong>
+                      {formatPrice(
+                        plan.prices?.yearly?.amountPaise,
+                        plan.prices?.yearly?.currency,
+                      )}
+                    </strong>
+                    <span>/ year</span>
+                  </div>
+                </div>
+
+                <span
+                  className={`subscription-plan-card__availability ${
+                    plan.isActive ? "is-active" : "is-inactive"
+                  }`}
+                >
+                  {plan.isActive ? "Available" : "Unavailable"}
+                </span>
+
+                {isCurrentSelection && (
+                  <span className="subscription-plan-current">
+                    Current Plan
+                  </span>
+                )}
+
+                {isOwner && !isFree && !isCurrentSelection && (
+                  <button
+                    type="button"
+                    className="subscription-action-button subscription-action-button--primary"
+                    disabled={!canChangePlan || actionLoading}
+                    onClick={() =>
+                      isPaidPlan
+                        ? handleChangePlan(plan)
+                        : handleUpgradePlan(plan)
+                    }
+                  >
+                    {actionLoading
+                      ? "Please wait..."
+                      : isPaidPlan
+                        ? "Change Plan"
+                        : "Upgrade"}
+                  </button>
+                )}
+
+                {!isOwner && !isCurrentSelection && !isFree && (
+                  <p className="subscription-plan-owner-note">
+                    Contact your organization owner to change plans.
+                  </p>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
 
