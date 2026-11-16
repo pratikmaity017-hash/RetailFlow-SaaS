@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getSupplierById } from "../supplierService";
+import { getSupplierById, updateSupplierStatus } from "../supplierService";
 import { getUserOrganizations } from "../../organization/organizationService";
 import Skeleton from "../../../shared/components/Skeleton";
 import "./supplier-details.css";
@@ -22,6 +22,9 @@ export default function SupplierDetailsPage() {
 
   const [supplier, setSupplier] = useState(null);
   const [userRole, setUserRole] = useState("");
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusActionMessage, setStatusActionMessage] = useState("");
+  const [statusActionError, setStatusActionError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -87,6 +90,53 @@ export default function SupplierDetailsPage() {
       cancelled = true;
     };
   }, [supplierId]);
+
+  async function handleSupplierStatusChange() {
+    if (userRole !== "owner" || statusUpdating || !supplier) {
+      return;
+    }
+
+    const nextStatus = supplier.status === "active" ? "inactive" : "active";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${nextStatus === "inactive" ? "deactivate" : "activate"} this supplier?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setStatusUpdating(true);
+      setStatusActionMessage("");
+      setStatusActionError("");
+
+      const organizationId = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
+
+      const response = await updateSupplierStatus(
+        organizationId,
+        supplier._id,
+        nextStatus,
+      );
+
+      if (!response?.data?.supplier) {
+        throw new Error("Supplier status could not be updated.");
+      }
+
+      setSupplier(response.data.supplier);
+      setStatusActionMessage(
+        `Supplier ${nextStatus === "active" ? "activated" : "deactivated"} successfully.`,
+      );
+    } catch (err) {
+      setStatusActionError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update supplier status.",
+      );
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -206,7 +256,31 @@ export default function SupplierDetailsPage() {
           >
             {supplier.status}
           </span>
+          {userRole === "owner" && (
+            <button
+              type="button"
+              className={`supplier-status-action-button ${
+                supplier.status === "active" ? "deactivate" : "activate"
+              }`}
+              onClick={handleSupplierStatusChange}
+              disabled={statusUpdating}
+            >
+              {statusUpdating
+                ? "Updating..."
+                : supplier.status === "active"
+                  ? "Deactivate Supplier"
+                  : "Activate Supplier"}
+            </button>
+          )}
         </div>
+
+        {statusActionMessage && (
+          <p className="supplier-status-success">{statusActionMessage}</p>
+        )}
+
+        {statusActionError && (
+          <p className="supplier-status-error">{statusActionError}</p>
+        )}
 
         <div className="supplier-details-grid">
           <DetailItem label="Supplier Name" value={supplier.name} />
