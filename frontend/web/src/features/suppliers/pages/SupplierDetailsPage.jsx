@@ -90,11 +90,56 @@ export default function SupplierDetailsPage() {
 
   if (loading) {
     return (
-      <main className="supplier-details-page supplier-details-skeleton-page">
-        <Skeleton width="180px" height="14px" />
-        <Skeleton width="260px" height="32px" />
-        <Skeleton width="100%" height="180px" />
-        <Skeleton width="100%" height="140px" />
+      <main className="supplier-details-page">
+        <div className="supplier-details-skeleton-header">
+          <Skeleton width="150px" height="14px" />
+          <Skeleton width="260px" height="30px" />
+          <Skeleton width="220px" height="14px" />
+        </div>
+
+        <section className="supplier-details-card">
+          <div className="supplier-details-skeleton-card-header">
+            <div>
+              <Skeleton width="170px" height="18px" />
+              <Skeleton width="230px" height="13px" />
+            </div>
+            <Skeleton width="75px" height="26px" />
+          </div>
+
+          <div className="supplier-details-skeleton-grid">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="supplier-details-skeleton-item">
+                <Skeleton width="90px" height="12px" />
+                <Skeleton width="150px" height="16px" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="supplier-details-card">
+          <Skeleton width="100px" height="18px" />
+
+          <div className="supplier-details-skeleton-grid">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="supplier-details-skeleton-item">
+                <Skeleton width="85px" height="12px" />
+                <Skeleton width="145px" height="16px" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="supplier-details-card">
+          <Skeleton width="120px" height="18px" />
+          <div className="supplier-details-skeleton-grid">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="supplier-details-skeleton-item">
+                <Skeleton width="70px" height="12px" />
+                <Skeleton width="130px" height="16px" />
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     );
   }

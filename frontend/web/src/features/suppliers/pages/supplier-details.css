@@ -203,3 +203,47 @@
     flex-direction: column;
   }
 }
+
+/* Supplier Details Loading Skeleton */
+.supplier-details-skeleton-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.supplier-details-skeleton-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.supplier-details-skeleton-card-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.supplier-details-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 30px;
+  margin-top: 24px;
+}
+
+.supplier-details-skeleton-item {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .supplier-details-skeleton-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}

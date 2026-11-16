@@ -192,9 +192,42 @@ export default function SupplierEditPage() {
 
   if (loading) {
     return (
-      <div className="edit-supplier-page">
-        <Skeleton />
-      </div>
+      <main className="edit-supplier-page">
+        <div className="edit-supplier-skeleton-header">
+          <Skeleton width="150px" height="14px" />
+          <Skeleton width="190px" height="30px" />
+          <Skeleton width="220px" height="14px" />
+        </div>
+
+        <div className="edit-supplier-form">
+          <section className="edit-supplier-section">
+            <Skeleton width="180px" height="18px" />
+
+            <div className="edit-supplier-grid edit-supplier-skeleton-grid">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="edit-supplier-skeleton-field">
+                  <Skeleton width="110px" height="13px" />
+                  <Skeleton width="100%" height="42px" />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="edit-supplier-section">
+            <Skeleton width="180px" height="18px" />
+
+            <div className="edit-supplier-skeleton-field">
+              <Skeleton width="60px" height="13px" />
+              <Skeleton width="100%" height="100px" />
+            </div>
+          </section>
+
+          <div className="edit-supplier-actions">
+            <Skeleton width="100px" height="42px" />
+            <Skeleton width="130px" height="42px" />
+          </div>
+        </div>
+      </main>
     );
   }
 
