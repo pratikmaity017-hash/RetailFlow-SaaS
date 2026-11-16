@@ -3,7 +3,7 @@ import Subscription from "../models/subscription.model.js";
 import SubscriptionPlan from "../models/subscription-plan.model.js";
 
 import { env } from "../config/env.js";
-import { createRazorpayOrder } from "./razorpay.service.js";
+import { createRazorpayOrder, fetchRazorpayOrder } from "./razorpay.service.js";
 import { createServiceError } from "../utils/service-error.util.js";
 
 import {
@@ -154,7 +154,7 @@ export async function requestSubscriptionPlanChange({
       );
     }
 
-    const unresolvedPayment = await BillingPayment.exists({
+    const unresolvedPayment = await BillingPayment.findOne({
       subscription: subscription._id,
       status: {
         $in: [
@@ -169,6 +169,70 @@ export async function requestSubscriptionPlanChange({
     await heartbeat.assertOwnership();
 
     if (unresolvedPayment) {
+      const isSamePlanChange =
+        unresolvedPayment.paymentType === "plan_change" &&
+        String(unresolvedPayment.plan) === String(requestedPlan._id) &&
+        unresolvedPayment.billingInterval === billingInterval;
+
+      // Reuse the existing Razorpay order for the same pending plan change.
+      if (
+        isSamePlanChange &&
+        unresolvedPayment.status === "pending" &&
+        unresolvedPayment.orderCreationStatus === "created" &&
+        unresolvedPayment.razorpayOrderId
+      ) {
+        const razorpayOrder = await fetchRazorpayOrder(
+          unresolvedPayment.razorpayOrderId,
+        );
+
+        await heartbeat.assertOwnership();
+
+        const expectedNotes = {
+          billingPaymentId: unresolvedPayment._id.toString(),
+          organizationId: organizationId.toString(),
+          planCode: requestedPlan.code,
+          billingInterval,
+          paymentType: "plan_change",
+        };
+
+        const notesMismatch = Object.entries(expectedNotes).some(
+          ([key, value]) =>
+            !value || razorpayOrder.notes?.[key] !== String(value),
+        );
+
+        if (
+          razorpayOrder.id !== unresolvedPayment.razorpayOrderId ||
+          razorpayOrder.receipt !== unresolvedPayment._id.toString() ||
+          razorpayOrder.amount !== unresolvedPayment.amountPaise ||
+          razorpayOrder.currency !== unresolvedPayment.currency ||
+          notesMismatch
+        ) {
+          throw createServiceError(
+            409,
+            "RAZORPAY_ORDER_DETAILS_MISMATCH",
+            "Existing Razorpay order details do not match. Manual review is required.",
+          );
+        }
+
+        if (
+          razorpayOrder.status !== "created" ||
+          razorpayOrder.amountDue !== unresolvedPayment.amountPaise ||
+          razorpayOrder.amountPaid !== 0
+        ) {
+          throw createServiceError(
+            409,
+            "PAYMENT_ORDER_NOT_CHECKOUT_READY",
+            "Existing payment order is not available for another checkout attempt. Recover the payment first.",
+          );
+        }
+
+        return buildPlanChangeCheckout({
+          billingPayment: unresolvedPayment,
+          razorpayOrder,
+          plan: requestedPlan,
+        });
+      }
+
       throw createServiceError(
         409,
         "UNRESOLVED_PAYMENT_EXISTS",
