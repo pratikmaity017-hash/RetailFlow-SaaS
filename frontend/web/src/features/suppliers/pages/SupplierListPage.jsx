@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { getSuppliers } from "../supplierService";
+import { getSuppliers, updateSupplierStatus } from "../supplierService";
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import Skeleton from "../../../shared/components/Skeleton";
@@ -30,6 +30,10 @@ export default function SupplierListPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [pagination, setPagination] = useState(EMPTY_PAGINATION);
+
+  const [updatingSupplierId, setUpdatingSupplierId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSuppliersLoading, setIsSuppliersLoading] = useState(false);
@@ -167,6 +171,57 @@ export default function SupplierListPage() {
     setCurrentPage(1);
   }
 
+  async function handleSupplierStatusChange(supplier) {
+    if (userRole !== "owner" || updatingSupplierId) {
+      return;
+    }
+
+    const nextStatus = supplier.status === "active" ? "inactive" : "active";
+
+    const action = nextStatus === "inactive" ? "deactivate" : "activate";
+
+    if (
+      !window.confirm(`Are you sure you want to ${action} ${supplier.name}?`)
+    ) {
+      return;
+    }
+
+    try {
+      setUpdatingSupplierId(supplier._id);
+      setActionMessage("");
+      setActionError("");
+
+      await updateSupplierStatus(
+        selectedOrganizationId,
+        supplier._id,
+        nextStatus,
+      );
+
+      const params = {
+        page: currentPage,
+        limit: PAGE_SIZE,
+      };
+
+      if (search.trim()) params.search = search.trim();
+      if (statusFilter !== "all") params.status = statusFilter;
+
+      const response = await getSuppliers(selectedOrganizationId, params);
+
+      setSuppliers(response?.data?.suppliers || []);
+      setPagination(response?.data?.pagination || EMPTY_PAGINATION);
+
+      setActionMessage(`${supplier.name} ${action}d successfully.`);
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to update supplier status.",
+      );
+    } finally {
+      setUpdatingSupplierId("");
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="supplier-page supplier-skeleton-page">
@@ -296,6 +351,18 @@ export default function SupplierListPage() {
             </div>
           </div>
 
+          {actionMessage && (
+            <div className="supplier-action-success" role="status">
+              {actionMessage}
+            </div>
+          )}
+
+          {actionError && (
+            <div className="supplier-action-error" role="alert">
+              {actionError}
+            </div>
+          )}
+
           {isSuppliersLoading ? (
             <div className="supplier-skeleton-table">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -356,15 +423,50 @@ export default function SupplierListPage() {
                         </td>
 
                         <td>
-                          <button
-                            type="button"
-                            className="supplier-view-button"
-                            onClick={() =>
-                              navigate(`/suppliers/${supplier._id}`)
-                            }
-                          >
-                            View
-                          </button>
+                          <div className="supplier-row-actions">
+                            <button
+                              type="button"
+                              className="supplier-view-button"
+                              onClick={() =>
+                                navigate(`/suppliers/${supplier._id}`)
+                              }
+                            >
+                              View
+                            </button>
+
+                            {canManageSuppliers && (
+                              <button
+                                type="button"
+                                className="supplier-edit-list-button"
+                                onClick={() =>
+                                  navigate(`/suppliers/${supplier._id}/edit`)
+                                }
+                              >
+                                Edit
+                              </button>
+                            )}
+
+                            {userRole === "owner" && (
+                              <button
+                                type="button"
+                                className={`supplier-list-status-button ${
+                                  supplier.status === "active"
+                                    ? "deactivate"
+                                    : "activate"
+                                }`}
+                                onClick={() =>
+                                  handleSupplierStatusChange(supplier)
+                                }
+                                disabled={updatingSupplierId === supplier._id}
+                              >
+                                {updatingSupplierId === supplier._id
+                                  ? "Updating..."
+                                  : supplier.status === "active"
+                                    ? "Deactivate"
+                                    : "Activate"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
