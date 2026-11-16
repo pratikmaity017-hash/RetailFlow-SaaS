@@ -63,7 +63,6 @@ export function AuthProvider({ children }) {
 
   const retrySessionRestore = useCallback(async () => {
     setIsRetrying(true);
-    setAuthError("");
 
     const result = await restoreSession();
 
