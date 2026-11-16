@@ -90,9 +90,12 @@ export default function SupplierDetailsPage() {
 
   if (loading) {
     return (
-      <div className="supplier-details-page">
-        <Skeleton />
-      </div>
+      <main className="supplier-details-page supplier-details-skeleton-page">
+        <Skeleton width="180px" height="14px" />
+        <Skeleton width="260px" height="32px" />
+        <Skeleton width="100%" height="180px" />
+        <Skeleton width="100%" height="140px" />
+      </main>
     );
   }
 
@@ -116,23 +119,24 @@ export default function SupplierDetailsPage() {
     <div className="supplier-details-page">
       <header className="supplier-details-header">
         <div className="supplier-details-heading">
-          <button type="button" onClick={() => navigate("/suppliers")}>
+          <button
+            type="button"
+            className="supplier-back-button"
+            onClick={() => navigate("/suppliers")}
+          >
             ← Back to Suppliers
           </button>
 
+          <p className="supplier-details-eyebrow">SUPPLIER MANAGEMENT</p>
+
           <h1>{supplier.name}</h1>
-          <p>Supplier information and contact details</p>
+
+          <p className="supplier-details-subtitle">
+            View supplier information and contact details.
+          </p>
         </div>
 
         <div className="supplier-details-header-actions">
-          <span
-            className={`supplier-details-status ${
-              supplier.status === "active" ? "active" : "inactive"
-            }`}
-          >
-            {supplier.status}
-          </span>
-
           {["owner", "manager"].includes(userRole) && (
             <button
               type="button"
@@ -146,7 +150,18 @@ export default function SupplierDetailsPage() {
       </header>
 
       <section className="supplier-details-card">
-        <h2>Basic Information</h2>
+        <div className="supplier-details-card-header">
+          <div>
+            <h2>Basic Information</h2>
+            <p>Supplier contact and business information.</p>
+          </div>
+
+          <span
+            className={`supplier-status supplier-status-${supplier.status}`}
+          >
+            {supplier.status}
+          </span>
+        </div>
 
         <div className="supplier-details-grid">
           <DetailItem label="Supplier Name" value={supplier.name} />

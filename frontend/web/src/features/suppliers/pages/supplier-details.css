@@ -4,6 +4,7 @@
   color: #1e293b;
 }
 
+/* Page Header */
 .supplier-details-header {
   display: flex;
   align-items: flex-start;
@@ -24,7 +25,8 @@
   font-size: 14px;
 }
 
-.supplier-details-header button,
+/* Back Button */
+.supplier-details-header .supplier-back-button,
 .supplier-details-page > button {
   padding: 8px 0;
   border: none;
@@ -35,24 +37,85 @@
   cursor: pointer;
 }
 
-.supplier-details-status {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: capitalize;
+/* Header Actions */
+.supplier-details-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
+/* Edit Supplier Button - Matches Customer Edit Button */
+.supplier-edit-button {
+  padding: 10px 16px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: all 0.2s ease;
+}
+
+.supplier-edit-button:hover {
+  opacity: 0.9;
+}
+
+.supplier-edit-button:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.2);
+  outline-offset: 2px;
+}
+
+/* Basic Information Card Header */
+.supplier-details-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.supplier-details-card-header h2 {
+  margin: 0;
+}
+
+.supplier-details-card-header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Supplier Status */
+.supplier-status,
+.supplier-details-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.supplier-status-active,
 .supplier-details-status.active {
   background: #dcfce7;
   color: #166534;
 }
 
+.supplier-status-inactive,
 .supplier-details-status.inactive {
   background: #fee2e2;
   color: #991b1b;
 }
 
+/* Details Cards */
 .supplier-details-card {
   margin-bottom: 20px;
   padding: 22px;
@@ -67,6 +130,7 @@
   font-weight: 700;
 }
 
+/* Details Grid */
 .supplier-details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -92,6 +156,7 @@
   font-weight: 600;
 }
 
+/* Error Message */
 .supplier-details-error {
   margin-top: 20px;
   padding: 16px;
@@ -101,13 +166,10 @@
   color: #b91c1c;
 }
 
+/* Tablet and Mobile */
 @media (max-width: 768px) {
   .supplier-details-page {
     padding: 16px;
-  }
-
-  .supplier-details-header {
-    flex-direction: column;
   }
 
   .supplier-details-grid {
@@ -117,5 +179,27 @@
 
   .supplier-details-card {
     padding: 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .supplier-details-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .supplier-details-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .supplier-details-card-header {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .supplier-details-card-header {
+    flex-direction: column;
   }
 }
