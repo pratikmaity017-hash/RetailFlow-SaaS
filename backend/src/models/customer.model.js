@@ -108,6 +108,12 @@ customerSchema.index({
   phone: 1,
 });
 
+// Organization-scoped listing sorted by creation date.
+customerSchema.index({
+  organization: 1,
+  createdAt: -1,
+});
+
 const Customer = mongoose.model("Customer", customerSchema);
 
 export default Customer;

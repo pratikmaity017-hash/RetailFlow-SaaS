@@ -73,7 +73,7 @@ export async function getCustomers({
     ];
   }
 
-  const currentPage = normalizePagination(page, 1);
+  const currentPage = normalizePagination(page, 1,10000);
   const pageSize = normalizePagination(limit, 20, 100);
   const skip = (currentPage - 1) * pageSize;
 
