@@ -505,3 +505,18 @@
     flex-direction: column;
   }
 }
+
+.subscription-payment-recovery {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+
+.subscription-payment-recovery p {
+  margin: 0 0 12px;
+  color: #1e40af;
+  font-size: 13px;
+  line-height: 1.5;
+}

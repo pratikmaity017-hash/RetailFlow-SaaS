@@ -9,6 +9,7 @@ import {
   verifySubscriptionPayment,
   cancelSubscription,
   resumeSubscription,
+  recoverSubscriptionPayment,
 } from "../subscriptionService";
 import { loadRazorpayCheckout } from "../razorpayCheckout";
 import { getOrganizationContext } from "../../organization/organizationService";
@@ -92,6 +93,7 @@ export default function SubscriptionPage() {
   const [actionError, setActionError] = useState("");
   const [selectedBillingInterval, setSelectedBillingInterval] =
     useState("monthly");
+  const [pendingRecoveryOrderId, setPendingRecoveryOrderId] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -140,6 +142,35 @@ export default function SubscriptionPage() {
     }
   }
 
+  async function handleRecoverPayment() {
+    if (!isOwner || !pendingRecoveryOrderId) return;
+
+    const organizationId = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
+
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setActionMessage("");
+
+      await recoverSubscriptionPayment(organizationId, {
+        orderId: pendingRecoveryOrderId,
+      });
+
+      setActionMessage("Payment recovered successfully.");
+      setPendingRecoveryOrderId("");
+
+      window.location.reload();
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to recover payment. Please try again later.",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleUpgradePlan(plan) {
     if (!isOwner) return;
 
@@ -167,7 +198,9 @@ export default function SubscriptionPage() {
       if (
         !checkoutData?.keyId ||
         !checkoutData?.orderId ||
-        !checkoutData?.amount
+        !Number.isSafeInteger(checkoutData?.amount) ||
+        checkoutData.amount <= 0 ||
+        !checkoutData?.currency
       ) {
         throw new Error("Invalid checkout information received.");
       }
@@ -195,11 +228,16 @@ export default function SubscriptionPage() {
 
             window.location.reload();
           } catch (err) {
+            setPendingRecoveryOrderId(
+              paymentResponse.razorpay_order_id || checkoutData.orderId,
+            );
+
             setActionError(
               err.response?.data?.message ||
                 err.message ||
-                "Payment verification failed. Please contact support.",
+                "Payment verification failed. If your payment was deducted, try recovering it.",
             );
+
             setActionLoading(false);
           }
         },
@@ -450,6 +488,24 @@ export default function SubscriptionPage() {
 
           {actionError && (
             <p className="subscription-action-error">{actionError}</p>
+          )}
+
+          {pendingRecoveryOrderId && isOwner && (
+            <div className="subscription-payment-recovery">
+              <p>
+                If your payment was deducted but your subscription was not
+                updated, try recovering the payment.
+              </p>
+
+              <button
+                type="button"
+                className="subscription-action-button subscription-action-button--primary"
+                onClick={handleRecoverPayment}
+                disabled={actionLoading}
+              >
+                {actionLoading ? "Checking payment..." : "Recover Payment"}
+              </button>
+            </div>
           )}
 
           {currentSubscription?.pendingChange && (
