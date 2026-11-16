@@ -19,6 +19,7 @@ import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
+import PageNotFound from "../shared/pages/PageNotFound";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -105,7 +106,7 @@ function AppRoutes() {
       {/* Default Routes */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
 }
