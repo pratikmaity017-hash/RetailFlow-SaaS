@@ -65,7 +65,7 @@ export function AuthProvider({ children }) {
     setIsRetrying(true);
 
     try {
-      const [result] = await Promise.all([
+       const [result] = await Promise.all([
         restoreSession(),
         new Promise((resolve) => window.setTimeout(resolve, 600)),
       ]);
