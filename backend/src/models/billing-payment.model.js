@@ -112,6 +112,31 @@ const billingPaymentSchema = new mongoose.Schema(
       default: null,
     },
 
+    reconciliation: {
+      status: {
+        type: String,
+        enum: ["not_required", "pending", "resolved"],
+        default: "not_required",
+      },
+
+      reason: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: null,
+      },
+
+      requiredAt: {
+        type: Date,
+        default: null,
+      },
+
+      resolvedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
     refundRetryCount: {
       type: Number,
       default: 0,
