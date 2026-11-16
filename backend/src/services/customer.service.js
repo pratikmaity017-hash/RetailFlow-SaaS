@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { createServiceError } from "../utils/service-error.util.js";
 import Customer from "../models/customer.model.js";
 import { withSubscriptionLimit } from "./subscription-limit.service.js";
@@ -97,6 +98,9 @@ export async function getCustomers({
 
 // Get one customer belonging to the requested organization.
 export async function getCustomerById({ organizationId, customerId }) {
+  if (!mongoose.isObjectIdOrHexString(customerId)) {
+    throw createServiceError(404, "CUSTOMER_NOT_FOUND", "Customer not found");
+  }
   const customer = await Customer.findOne({
     _id: customerId,
     organization: organizationId,
