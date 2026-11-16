@@ -439,3 +439,25 @@
   border-color: #6366f1;
   color: #4f46e5;
 }
+
+.customer-reactivate-button {
+  padding: 7px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.customer-reactivate-button:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.customer-reactivate-button:active {
+  transform: scale(0.97);
+}

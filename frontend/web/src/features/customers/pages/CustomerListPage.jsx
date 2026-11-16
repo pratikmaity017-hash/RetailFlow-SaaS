@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { getCustomers, deactivateCustomer ,updateCustomer } from "../customerService";
+import {
+  getCustomers,
+  deactivateCustomer,
+  updateCustomer,
+} from "../customerService";
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import Skeleton from "../../../shared/components/Skeleton";
@@ -35,6 +39,8 @@ export default function CustomerListPage() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [deactivatingCustomerId, setDeactivatingCustomerId] = useState("");
+  const [reactivatingCustomerId, setReactivatingCustomerId] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -205,14 +211,24 @@ export default function CustomerListPage() {
 
       await deactivateCustomer(selectedOrganizationId, customer._id);
 
-      setCustomers((currentCustomers) =>
-        currentCustomers.filter((item) => item._id !== customer._id),
-      );
+      if (statusFilter === "all") {
+        // Keep the customer visible, but update its status.
+        setCustomers((currentCustomers) =>
+          currentCustomers.map((item) =>
+            item._id === customer._id ? { ...item, status: "inactive" } : item,
+          ),
+        );
+      } else {
+        // Remove it only from the Active filter.
+        setCustomers((currentCustomers) =>
+          currentCustomers.filter((item) => item._id !== customer._id),
+        );
 
-      setPagination((current) => ({
-        ...current,
-        totalCustomers: Math.max(0, current.totalCustomers - 1),
-      }));
+        setPagination((current) => ({
+          ...current,
+          totalCustomers: Math.max(0, current.totalCustomers - 1),
+        }));
+      }
     } catch (err) {
       setActionError(err.message || "Unable to deactivate customer.");
     } finally {
@@ -222,15 +238,36 @@ export default function CustomerListPage() {
 
   async function handleReactivateCustomer(customer) {
     try {
-      await updateCustomer(organizationId, customer._id, { status: "active" });
+      setActionError("");
+      setActionSuccess("");
+      setReactivatingCustomerId(customer._id);
 
-      setCustomers((current) =>
-        current.map((item) =>
-          item._id === customer._id ? { ...item, status: "active" } : item,
-        ),
-      );
+      await updateCustomer(selectedOrganizationId, customer._id, {
+        status: "active",
+      });
+
+      if (statusFilter === "inactive") {
+        setCustomers((current) =>
+          current.filter((item) => item._id !== customer._id),
+        );
+
+        setPagination((current) => ({
+          ...current,
+          totalCustomers: Math.max(0, current.totalCustomers - 1),
+        }));
+      } else {
+        setCustomers((current) =>
+          current.map((item) =>
+            item._id === customer._id ? { ...item, status: "active" } : item,
+          ),
+        );
+      }
+
+      setActionSuccess(`${customer.name} has been reactivated successfully.`);
     } catch (err) {
-      setError(err.message || "Unable to reactivate customer.");
+      setActionError(err.message || "Unable to reactivate customer.");
+    } finally {
+      setReactivatingCustomerId("");
     }
   }
 
@@ -340,6 +377,11 @@ export default function CustomerListPage() {
       {actionError && (
         <div className="customer-alert" role="alert">
           {actionError}
+        </div>
+      )}
+      {actionSuccess && (
+        <div className="customer-success-alert" role="status">
+          {actionSuccess}
         </div>
       )}
 
@@ -472,8 +514,13 @@ export default function CustomerListPage() {
                                 onClick={() =>
                                   handleReactivateCustomer(customer)
                                 }
+                                disabled={
+                                  reactivatingCustomerId === customer._id
+                                }
                               >
-                                Reactivate
+                                {reactivatingCustomerId === customer._id
+                                  ? "Reactivating..."
+                                  : "Reactivate"}
                               </button>
                             )}
                         </td>
