@@ -1,0 +1,47 @@
+.auth-server-error {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f8fafc;
+}
+
+.auth-server-error-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 32px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+}
+
+.auth-server-error-card h2 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.auth-server-error-card p {
+  margin: 0 0 24px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.auth-server-error-card button {
+  padding: 11px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-server-error-card button:hover {
+  background: #1d4ed8;
+}

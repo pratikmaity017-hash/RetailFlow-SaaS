@@ -83,11 +83,41 @@ apiClient.interceptors.response.use(
 
         return apiClient(originalRequest);
       } catch (refreshError) {
-        clearTokens();
+        const refreshStatus = refreshError.response?.status;
 
-        window.dispatchEvent(new Event("retailflow:auth-expired"));
+        const refreshCode =
+          refreshError.response?.data?.error?.code ||
+          refreshError.response?.data?.code;
 
-        return Promise.reject(refreshError);
+        const invalidSessionCodes = [
+          "INVALID_REFRESH_TOKEN",
+          "REFRESH_TOKEN_REUSE_DETECTED",
+          "REFRESH_SESSION_EXPIRED",
+          "INVALID_REFRESH_SESSION",
+        ];
+
+        const isInvalidSession =
+          refreshStatus === 401 && invalidSessionCodes.includes(refreshCode);
+
+        if (isInvalidSession) {
+          clearTokens();
+
+          window.dispatchEvent(new Event("retailflow:auth-expired"));
+        }
+
+        const message =
+          refreshError.response?.data?.error?.message ||
+          refreshError.message ||
+          "Unable to connect to the server.";
+
+        const apiError = new Error(message);
+
+        apiError.status = refreshStatus;
+        apiError.code =
+          refreshCode ||
+          (refreshError.response ? "REFRESH_FAILED" : "NETWORK_ERROR");
+
+        return Promise.reject(apiError);
       }
     }
 

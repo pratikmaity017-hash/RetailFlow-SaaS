@@ -10,34 +10,46 @@ import {
   saveTokens,
 } from "../../services/api/tokenStorage";
 
-// Prevent duplicate refresh requests during React development remounts.
 let sessionRestorePromise = null;
 
 async function restoreSession() {
   if (!sessionRestorePromise) {
     sessionRestorePromise = (async () => {
+      const refreshToken = getRefreshToken();
+
+      if (!refreshToken) {
+        clearTokens();
+        return { user: null, error: null };
+      }
+
       try {
-        const refreshToken = getRefreshToken();
-
-        if (!refreshToken) {
-          clearTokens();
-          return null;
-        }
-
         const response = await refreshUserSession(refreshToken);
         const tokens = response.data.tokens;
 
-        // Save both rotated tokens.
         saveTokens(tokens);
 
         const userResponse = await getCurrentUser(tokens.accessToken);
 
-        return userResponse.data;
-      } catch {
-        clearTokens();
-        return null;
+        return { user: userResponse.data, error: null };
+      } catch (error) {
+        const status = error.response?.status;
+
+        // Clear tokens only when the server confirms
+        // that the authentication session is invalid.
+        if (status === 401 || status === 403) {
+          clearTokens();
+          return { user: null, error: null };
+        }
+
+        // Preserve tokens for network and server errors.
+        return {
+          user: null,
+          error: error.message || "Unable to connect to the server.",
+        };
       }
-    })();
+    })().finally(() => {
+      sessionRestorePromise = null;
+    });
   }
 
   return sessionRestorePromise;
@@ -46,22 +58,36 @@ async function restoreSession() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+
+  const retrySessionRestore = useCallback(async () => {
+    setIsLoading(true);
+    setAuthError("");
+
+    const result = await restoreSession();
+
+    setUser(result.user);
+    setAuthError(result.error || "");
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     function handleAuthExpired() {
       setUser(null);
+      setAuthError("");
       setIsLoading(false);
     }
 
     window.addEventListener("retailflow:auth-expired", handleAuthExpired);
 
     async function initializeAuth() {
-      const restoredUser = await restoreSession();
+      const result = await restoreSession();
 
       if (isMounted) {
-        setUser(restoredUser);
+        setUser(result.user);
+        setAuthError(result.error || "");
         setIsLoading(false);
       }
     }
@@ -76,6 +102,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback((userData) => {
     setUser(userData);
+    setAuthError("");
   }, []);
 
   const logout = useCallback(async () => {
@@ -90,6 +117,7 @@ export function AuthProvider({ children }) {
     } finally {
       clearTokens();
       setUser(null);
+      setAuthError("");
     }
   }, []);
 
@@ -97,6 +125,8 @@ export function AuthProvider({ children }) {
     user,
     isAuthenticated: Boolean(user),
     isLoading,
+    authError,
+    retrySessionRestore,
     login,
     logout,
   };

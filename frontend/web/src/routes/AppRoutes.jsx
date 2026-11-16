@@ -17,18 +17,39 @@ import ProductVariantsPage from "../features/products/pages/ProductVariantsPage"
 import InventoryOverviewPage from "../features/inventory/pages/InventoryOverviewPage";
 import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage";
 import CustomerListPage from "../features/customers/pages/CustomerListPage";
+import CreateCustomerPage from "../features/customers/pages/CreateCustomerPage";
 import EditCustomerPage from "../features/customers/pages/EditCustomerPage";
 import CustomerDetailsPage from "../features/customers/pages/CustomerDetailsPage";
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
 import PageNotFound from "../shared/pages/PageNotFound";
+import "./auth-server-error.css";
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, authError, retrySessionRestore } =
+    useAuth();
 
   if (isLoading) {
     return <AppLoader />;
+  }
+
+  if (authError) {
+    return (
+      <div className="auth-server-error">
+        <div className="auth-server-error-card">
+          <h2>Unable to Connect to Server</h2>
+          <p>
+            RetailFlow server is currently unavailable. Please check your
+            connection and try again.
+          </p>
+
+          <button type="button" onClick={retrySessionRestore}>
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return isAuthenticated ? children : <Navigate to="/login" replace />;
@@ -105,6 +126,7 @@ function AppRoutes() {
           element={<StockAdjustmentPage />}
         />
         <Route path="/customers" element={<CustomerListPage />} />
+        <Route path="/customers/new" element={<CreateCustomerPage />} />
         <Route
           path="/customers/:customerId/edit"
           element={<EditCustomerPage />}
