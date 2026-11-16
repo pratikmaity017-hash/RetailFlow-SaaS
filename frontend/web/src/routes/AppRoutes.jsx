@@ -16,6 +16,7 @@ import ProductVariantsPage from "../features/products/pages/ProductVariantsPage"
 
 import InventoryOverviewPage from "../features/inventory/pages/InventoryOverviewPage";
 import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage";
+import CustomerListPage from "../features/customers/pages/CustomerListPage";
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
@@ -101,6 +102,7 @@ function AppRoutes() {
           path="/inventory/adjustments"
           element={<StockAdjustmentPage />}
         />
+        <Route path="/customers" element={<CustomerListPage />} />
       </Route>
 
       {/* Default Routes */}
