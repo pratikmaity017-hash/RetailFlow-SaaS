@@ -21,6 +21,7 @@ export default function SupplierDetailsPage() {
   const navigate = useNavigate();
 
   const [supplier, setSupplier] = useState(null);
+  const [userRole, setUserRole] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,6 +50,10 @@ export default function SupplierDetailsPage() {
         }
 
         const organizationId = selectedOrganization.organization.id;
+
+        if (!cancelled) {
+          setUserRole(selectedOrganization.role);
+        }
 
         localStorage.setItem(ORGANIZATION_STORAGE_KEY, organizationId);
 
@@ -110,7 +115,7 @@ export default function SupplierDetailsPage() {
   return (
     <div className="supplier-details-page">
       <header className="supplier-details-header">
-        <div>
+        <div className="supplier-details-heading">
           <button type="button" onClick={() => navigate("/suppliers")}>
             ← Back to Suppliers
           </button>
@@ -119,13 +124,25 @@ export default function SupplierDetailsPage() {
           <p>Supplier information and contact details</p>
         </div>
 
-        <span
-          className={`supplier-details-status ${
-            supplier.status === "active" ? "active" : "inactive"
-          }`}
-        >
-          {supplier.status}
-        </span>
+        <div className="supplier-details-header-actions">
+          <span
+            className={`supplier-details-status ${
+              supplier.status === "active" ? "active" : "inactive"
+            }`}
+          >
+            {supplier.status}
+          </span>
+
+          {["owner", "manager"].includes(userRole) && (
+            <button
+              type="button"
+              className="supplier-edit-button"
+              onClick={() => navigate(`/suppliers/${supplier._id}/edit`)}
+            >
+              Edit Supplier
+            </button>
+          )}
+        </div>
       </header>
 
       <section className="supplier-details-card">
