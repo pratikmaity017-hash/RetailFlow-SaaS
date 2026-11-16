@@ -27,8 +27,13 @@ import PageNotFound from "../shared/pages/PageNotFound";
 import "./auth-server-error.css";
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading, authError, retrySessionRestore } =
-    useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    authError,
+    retrySessionRestore,
+    isRetrying,
+  } = useAuth();
 
   if (isLoading) {
     return <AppLoader />;
@@ -38,15 +43,47 @@ function ProtectedRoute({ children }) {
     return (
       <div className="auth-server-error">
         <div className="auth-server-error-card">
-          <h2>Unable to Connect to Server</h2>
+          <div className="auth-error-icon-wrapper">
+            <div className="auth-error-icon">☁</div>
+            <span className="auth-error-icon-alert">!</span>
+          </div>
+
+          <span className="auth-error-eyebrow">CONNECTION INTERRUPTED</span>
+
+          <h2>Oops! Server Unavailable</h2>
+
           <p>
-            RetailFlow server is currently unavailable. Please check your
-            connection and try again.
+            We’re having trouble connecting to RetailFlow. Your session is safe.
+            Please check your connection and try again.
           </p>
 
-          <button type="button" onClick={retrySessionRestore}>
-            Retry Connection
+          <button
+            type="button"
+            onClick={retrySessionRestore}
+            disabled={isRetrying}
+          >
+            {isRetrying ? (
+              <>
+                <span className="auth-retry-spinner"></span>
+                <span>Reconnecting...</span>
+              </>
+            ) : (
+              <>
+                <span>Retry Connection</span>
+                <span className="auth-retry-arrow">→</span>
+              </>
+            )}
           </button>
+
+          <div className="auth-connection-status">
+            <span className="auth-status-dot"></span>
+            Waiting for server connection
+          </div>
+        </div>
+
+        <div className="auth-error-footer">
+          <span>RetailFlow SaaS</span>
+          <span>Reliable retail management</span>
         </div>
       </div>
     );

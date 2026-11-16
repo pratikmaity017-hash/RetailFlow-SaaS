@@ -59,16 +59,17 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const retrySessionRestore = useCallback(async () => {
-    setIsLoading(true);
+    setIsRetrying(true);
     setAuthError("");
 
     const result = await restoreSession();
 
     setUser(result.user);
     setAuthError(result.error || "");
-    setIsLoading(false);
+    setIsRetrying(false);
   }, []);
 
   useEffect(() => {
@@ -126,6 +127,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user),
     isLoading,
     authError,
+    isRetrying,
     retrySessionRestore,
     login,
     logout,
