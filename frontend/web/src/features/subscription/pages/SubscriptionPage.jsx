@@ -89,6 +89,7 @@ export default function SubscriptionPage() {
   const [payments, setPayments] = useState([]);
   const [userRole, setUserRole] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [processingPlanCode, setProcessingPlanCode] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [selectedBillingInterval, setSelectedBillingInterval] =
@@ -182,6 +183,7 @@ export default function SubscriptionPage() {
     }
 
     try {
+      setProcessingPlanCode(plan.code);
       setActionLoading(true);
       setActionError("");
       setActionMessage("");
@@ -225,7 +227,7 @@ export default function SubscriptionPage() {
               paymentId: paymentResponse.razorpay_payment_id,
               signature: paymentResponse.razorpay_signature,
             });
-
+            setProcessingPlanCode("");
             window.location.reload();
           } catch (err) {
             setPendingRecoveryOrderId(
@@ -237,13 +239,14 @@ export default function SubscriptionPage() {
                 err.message ||
                 "Payment verification failed. If your payment was deducted, try recovering it.",
             );
-
+            setProcessingPlanCode("");
             setActionLoading(false);
           }
         },
 
         modal: {
           ondismiss: function () {
+            setProcessingPlanCode("");
             setActionLoading(false);
           },
         },
@@ -254,6 +257,7 @@ export default function SubscriptionPage() {
           paymentResponse.error?.description ||
             "Payment failed. Please try again.",
         );
+        setProcessingPlanCode("");
         setActionLoading(false);
       });
 
@@ -264,6 +268,7 @@ export default function SubscriptionPage() {
           err.message ||
           "Unable to start subscription checkout.",
       );
+      setProcessingPlanCode("");
       setActionLoading(false);
     }
   }
@@ -285,6 +290,7 @@ export default function SubscriptionPage() {
     if (!confirmed) return;
 
     try {
+      setProcessingPlanCode(plan.code);
       setActionLoading(true);
       setActionError("");
       setActionMessage("");
@@ -307,6 +313,7 @@ export default function SubscriptionPage() {
           "Unable to schedule plan change.",
       );
     } finally {
+      setProcessingPlanCode("");
       setActionLoading(false);
     }
   }
@@ -649,7 +656,7 @@ export default function SubscriptionPage() {
                         : handleUpgradePlan(plan)
                     }
                   >
-                    {actionLoading
+                    {processingPlanCode === plan.code
                       ? "Please wait..."
                       : isPaidPlan
                         ? "Change Plan"

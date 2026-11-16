@@ -8,7 +8,7 @@ async function checkSubscription() {
   await connectDB();
 
   // তোমার actual Organization ID বসাও।
-  const organizationId = "6af85fc2288479fce214785f";
+  const organizationId = "6afb21ea44bf218cf95fa58b";
 
   const subscription = await Subscription.findOne({
     organization: organizationId,
