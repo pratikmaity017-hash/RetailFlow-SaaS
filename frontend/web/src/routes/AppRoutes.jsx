@@ -24,6 +24,7 @@ import SupplierListPage from "../features/suppliers/pages/SupplierListPage";
 import SupplierCreatePage from "../features/suppliers/pages/SupplierCreatePage";
 import SupplierEditPage from "../features/suppliers/pages/SupplierEditPage";
 import SupplierDetailsPage from "../features/suppliers/pages/SupplierDetailsPage";
+import SubscriptionPage from "../features/subscription/pages/SubscriptionPage";
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
@@ -188,6 +189,8 @@ function AppRoutes() {
           element={<SupplierDetailsPage />}
         />
       </Route>
+
+      <Route path="/subscription" element={<SubscriptionPage />} />
 
       {/* Default Routes */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

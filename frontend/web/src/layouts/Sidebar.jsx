@@ -30,6 +30,13 @@ const navigationItems = [
     icon: "suppliers",
     available: true,
   },
+
+  {
+    label: "Subscription",
+    path: "/subscription",
+    icon: "subscription",
+    available: true,
+  },
   { label: "Purchases", icon: "purchases", available: false },
   { label: "Team Members", icon: "team", available: false },
   { label: "Settings", icon: "settings", available: false },
@@ -57,6 +64,7 @@ const iconPaths = {
     "M7 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
     "M18 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
   ],
+  subscription: ["M3 7h18", "M5 3h14v18H5z", "M8 14h3", "M8 17h8"],
   purchases: ["M4 4h16v16H4z", "M8 8h8", "M8 12h8", "M8 16h5"],
   team: [
     "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2",
