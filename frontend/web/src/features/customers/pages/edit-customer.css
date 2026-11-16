@@ -1,0 +1,251 @@
+.edit-customer-page {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px;
+  color: #1e293b;
+}
+
+.edit-customer-header {
+  margin-bottom: 26px;
+}
+
+.edit-customer-back-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 18px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.edit-customer-back-button:hover {
+  color: #4f46e5;
+}
+
+.edit-customer-eyebrow {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.edit-customer-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.edit-customer-subtitle {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.edit-customer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.edit-customer-section {
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.edit-customer-section-header {
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.edit-customer-section-header h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.edit-customer-section-header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.edit-customer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.edit-customer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.edit-customer-field label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.edit-customer-field label span {
+  color: #dc2626;
+}
+
+.edit-customer-field input,
+.edit-customer-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 13px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.edit-customer-field input {
+  min-height: 42px;
+}
+
+.edit-customer-field textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.edit-customer-field input::placeholder,
+.edit-customer-field textarea::placeholder {
+  color: #94a3b8;
+}
+
+.edit-customer-field input:focus,
+.edit-customer-field textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.edit-customer-full-width {
+  grid-column: 1 / -1;
+}
+
+.edit-customer-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 0 10px;
+}
+
+.edit-customer-cancel-button,
+.edit-customer-save-button {
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-customer-cancel-button {
+  border: 1px solid #dbe3ef;
+  background: #ffffff;
+  color: #475569;
+}
+
+.edit-customer-cancel-button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.edit-customer-save-button {
+  border: 1px solid #4f46e5;
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.edit-customer-save-button:hover:not(:disabled) {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.edit-customer-save-button:disabled,
+.edit-customer-cancel-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.edit-customer-alert,
+.edit-customer-success {
+  padding: 13px 16px;
+  margin-bottom: 18px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.edit-customer-alert {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.edit-customer-success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+@media (max-width: 768px) {
+  .edit-customer-page {
+    padding: 20px;
+  }
+
+  .edit-customer-header h1 {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .edit-customer-page {
+    padding: 14px;
+  }
+
+  .edit-customer-section {
+    padding: 17px;
+  }
+
+  .edit-customer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-customer-full-width {
+    grid-column: auto;
+  }
+
+  .edit-customer-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .edit-customer-cancel-button,
+  .edit-customer-save-button {
+    width: 100%;
+  }
+}

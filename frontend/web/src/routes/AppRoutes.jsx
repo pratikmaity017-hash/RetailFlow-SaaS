@@ -17,6 +17,8 @@ import ProductVariantsPage from "../features/products/pages/ProductVariantsPage"
 import InventoryOverviewPage from "../features/inventory/pages/InventoryOverviewPage";
 import StockAdjustmentPage from "../features/inventory/pages/StockAdjustmentPage";
 import CustomerListPage from "../features/customers/pages/CustomerListPage";
+import EditCustomerPage from "../features/customers/pages/EditCustomerPage";
+import CustomerDetailsPage from "../features/customers/pages/CustomerDetailsPage";
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
@@ -103,6 +105,14 @@ function AppRoutes() {
           element={<StockAdjustmentPage />}
         />
         <Route path="/customers" element={<CustomerListPage />} />
+        <Route
+          path="/customers/:customerId/edit"
+          element={<EditCustomerPage />}
+        />
+        <Route
+          path="/customers/:customerId"
+          element={<CustomerDetailsPage />}
+        />
       </Route>
 
       {/* Default Routes */}

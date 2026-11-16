@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { getCustomers, deactivateCustomer } from "../customerService";
+import { getCustomers, deactivateCustomer ,updateCustomer } from "../customerService";
 import { getUserOrganizations } from "../../organization/organizationService";
 
 import Skeleton from "../../../shared/components/Skeleton";
@@ -220,6 +220,20 @@ export default function CustomerListPage() {
     }
   }
 
+  async function handleReactivateCustomer(customer) {
+    try {
+      await updateCustomer(organizationId, customer._id, { status: "active" });
+
+      setCustomers((current) =>
+        current.map((item) =>
+          item._id === customer._id ? { ...item, status: "active" } : item,
+        ),
+      );
+    } catch (err) {
+      setError(err.message || "Unable to reactivate customer.");
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="customer-page customer-skeleton-page">
@@ -394,7 +408,7 @@ export default function CustomerListPage() {
                       <th>Email</th>
                       <th>Status</th>
                       <th>Created</th>
-                      {canDeactivateCustomers && <th>Actions</th>}
+                      <th>Actions</th>
                     </tr>
                   </thead>
 
@@ -422,9 +436,19 @@ export default function CustomerListPage() {
                             : "—"}
                         </td>
 
-                        {canDeactivateCustomers && (
-                          <td>
-                            {customer.status === "active" && (
+                        <td>
+                          <button
+                            type="button"
+                            className="customer-view-button"
+                            onClick={() =>
+                              navigate(`/customers/${customer._id}`)
+                            }
+                          >
+                            View Details
+                          </button>
+
+                          {canDeactivateCustomers &&
+                            customer.status === "active" && (
                               <button
                                 type="button"
                                 className="customer-deactivate-button"
@@ -440,8 +464,19 @@ export default function CustomerListPage() {
                                   : "Deactivate"}
                               </button>
                             )}
-                          </td>
-                        )}
+                          {canDeactivateCustomers &&
+                            customer.status === "inactive" && (
+                              <button
+                                type="button"
+                                className="customer-reactivate-button"
+                                onClick={() =>
+                                  handleReactivateCustomer(customer)
+                                }
+                              >
+                                Reactivate
+                              </button>
+                            )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
