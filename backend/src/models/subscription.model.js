@@ -18,6 +18,12 @@ const pendingChangeSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+
+    billingPayment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "BillingPayment",
+      required: true,
+    },
   },
   {
     _id: false,
@@ -133,6 +139,10 @@ subscriptionSchema.index(
     sparse: true,
   },
 );
+
+subscriptionSchema.index({
+  "pendingChange.effectiveAt": 1,
+});
 
 const Subscription = mongoose.model("Subscription", subscriptionSchema);
 

@@ -22,7 +22,9 @@ function createServiceError(message, statusCode, code) {
 
 async function reconcileRazorpayOrder(billingPayment) {
   if (
-    !["initial", "renewal"].includes(billingPayment.paymentType) ||
+    !["initial", "renewal", "plan_change"].includes(
+      billingPayment.paymentType,
+    ) ||
     billingPayment.status !== "pending" ||
     !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
   ) {
@@ -244,7 +246,11 @@ async function activateSubscription({
         );
       }
 
-      if (!["initial", "renewal"].includes(currentPayment.paymentType)) {
+      if (
+        !["initial", "renewal", "plan_change"].includes(
+          currentPayment.paymentType,
+        )
+      ) {
         throw createServiceError(
           "Invalid billing payment type",
           409,
@@ -274,6 +280,64 @@ async function activateSubscription({
 
       // Renewal must belong to the subscription's current plan.
       const now = new Date();
+
+      const isPlanChange = currentPayment.paymentType === "plan_change";
+
+      if (isPlanChange) {
+        if (subscription.plan?.code === "free") {
+          throw createServiceError(
+            "Plan change payment requires an existing paid subscription",
+            409,
+            "PLAN_CHANGE_SUBSCRIPTION_MISMATCH",
+          );
+        }
+
+        if (subscription.status !== "active") {
+          throw createServiceError(
+            "Subscription is no longer active",
+            409,
+            "PLAN_CHANGE_SUBSCRIPTION_NOT_ACTIVE",
+          );
+        }
+
+        if (subscription.cancelAtPeriodEnd) {
+          throw createServiceError(
+            "Subscription cancellation is scheduled",
+            409,
+            "PLAN_CHANGE_CANCELLATION_SCHEDULED",
+          );
+        }
+
+        if (subscription.pendingChange) {
+          throw createServiceError(
+            "Another plan change is already scheduled",
+            409,
+            "PLAN_CHANGE_ALREADY_PENDING",
+          );
+        }
+
+        if (
+          !subscription.currentPeriodEnd ||
+          subscription.currentPeriodEnd <= now
+        ) {
+          throw createServiceError(
+            "Current subscription period is no longer valid",
+            409,
+            "PLAN_CHANGE_PERIOD_EXPIRED",
+          );
+        }
+
+        if (
+          String(currentPayment.plan) === String(subscription.plan?._id) &&
+          currentPayment.billingInterval === subscription.billingInterval
+        ) {
+          throw createServiceError(
+            "Requested plan is already active",
+            409,
+            "SAME_SUBSCRIPTION_PLAN",
+          );
+        }
+      }
 
       if (currentPayment.paymentType === "renewal") {
         if (subscription.pendingChange) {
@@ -340,6 +404,36 @@ async function activateSubscription({
 
       await currentPayment.save({ session });
 
+      // A paid plan change is prepaid and scheduled.
+      // Do not replace the current subscription immediately.
+      if (isPlanChange) {
+        const effectiveAt = new Date(subscription.currentPeriodEnd);
+
+        subscription.pendingChange = {
+          plan: currentPayment.plan,
+          billingInterval: currentPayment.billingInterval,
+          effectiveAt,
+          billingPayment: currentPayment._id,
+        };
+
+        await subscription.save({ session });
+
+        result = {
+          alreadyVerified: false,
+          paymentId: currentPayment._id,
+          subscriptionId: subscription._id,
+          paymentType: "plan_change",
+          status: "captured",
+          planChangeScheduled: true,
+          currentPlan: subscription.plan,
+          upcomingPlan: currentPayment.plan,
+          effectiveAt,
+        };
+
+        return;
+      }
+
+      // Existing initial checkout and renewal behaviour remains unchanged.
       subscription.plan = currentPayment.plan;
       subscription.status = "active";
       subscription.billingInterval = currentPayment.billingInterval;
@@ -354,6 +448,15 @@ async function activateSubscription({
 
       await subscription.save({ session });
 
+      result = {
+        alreadyVerified: false,
+        paymentId: currentPayment._id,
+        subscriptionId: subscription._id,
+        paymentType: currentPayment.paymentType || "initial",
+        status: "captured",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+      };
       result = {
         alreadyVerified: false,
         paymentId: currentPayment._id,
@@ -730,7 +833,9 @@ export async function reconcileWebhookRazorpayOrder(orderId) {
 
   // Only reconcile uncertain renewal order creation.
   if (
-    !["initial", "renewal"].includes(billingPayment.paymentType) ||
+    !["initial", "renewal", "plan_change"].includes(
+      billingPayment.paymentType,
+    ) ||
     billingPayment.status !== "pending" ||
     !["creating", "unknown"].includes(billingPayment.orderCreationStatus)
   ) {

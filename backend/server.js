@@ -3,16 +3,19 @@ import { env } from "./src/config/env.js";
 import connectDB from "./src/config/database.js";
 import mongoose from "mongoose";
 import { startWebhookRecoveryWorker } from "./src/workers/webhook-recovery.worker.js";
+import { startPrepaidPlanActivationWorker } from "./src/workers/prepaid-plan-activation.worker.js";
 
 let server;
 let isShuttingDown = false;
 let stopWebhookRecoveryWorker;
+let stopPrepaidPlanActivationWorker;
 
 async function startServer() {
   try {
     await connectDB();
 
     stopWebhookRecoveryWorker = startWebhookRecoveryWorker();
+    stopPrepaidPlanActivationWorker = startPrepaidPlanActivationWorker();
 
     const PORT = Number(process.env.PORT) || env.PORT || 3000;
 
@@ -37,6 +40,12 @@ const shutdown = async (signal) => {
     if (stopWebhookRecoveryWorker) {
       await stopWebhookRecoveryWorker();
       stopWebhookRecoveryWorker = null;
+    }
+
+    // Stop prepaid plan activation worker.
+    if (stopPrepaidPlanActivationWorker) {
+      await stopPrepaidPlanActivationWorker();
+      stopPrepaidPlanActivationWorker = null;
     }
 
     // 2. Close HTTP server and wait for active connections.

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import BillingPayment from "../models/billing-payment.model.js";
 import Subscription from "../models/subscription.model.js";
 
@@ -18,6 +19,48 @@ function createServiceError(message, statusCode, code) {
   error.statusCode = statusCode;
   error.code = code;
   return error;
+}
+
+function calculatePeriodEnd(startDate, billingInterval) {
+  if (!["monthly", "yearly"].includes(billingInterval)) {
+    throw createServiceError(
+      "Invalid billing interval",
+      400,
+      "INVALID_BILLING_INTERVAL",
+    );
+  }
+
+  const originalDate = new Date(startDate);
+  const originalDay = originalDate.getUTCDate();
+
+  const targetYear =
+    originalDate.getUTCFullYear() + (billingInterval === "yearly" ? 1 : 0);
+
+  const targetMonth =
+    originalDate.getUTCMonth() + (billingInterval === "monthly" ? 1 : 0);
+
+  const normalizedTarget = new Date(Date.UTC(targetYear, targetMonth, 1));
+
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(
+      normalizedTarget.getUTCFullYear(),
+      normalizedTarget.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+
+  const endDate = new Date(originalDate);
+
+  endDate.setUTCDate(1);
+  endDate.setUTCFullYear(
+    normalizedTarget.getUTCFullYear(),
+    normalizedTarget.getUTCMonth(),
+    1,
+  );
+
+  endDate.setUTCDate(Math.min(originalDay, lastDayOfTargetMonth));
+
+  return endDate;
 }
 
 async function findExistingRazorpayOrder(billingPayment) {
@@ -159,7 +202,8 @@ export async function createSubscriptionRenewal({
       organization: organizationId,
     })
       .populate("plan", "code name isActive prices")
-      .populate("pendingChange.plan", "code name isActive prices");
+      .populate("pendingChange.plan", "code name isActive prices")
+      .populate("pendingChange.billingPayment");
 
     await heartbeat.assertOwnership();
 
@@ -194,14 +238,6 @@ export async function createSubscriptionRenewal({
           "Scheduled subscription plan was not found",
           409,
           "PENDING_CHANGE_PLAN_NOT_FOUND",
-        );
-      }
-
-      if (!checkoutPlan.isActive) {
-        throw createServiceError(
-          "Scheduled subscription plan is no longer available",
-          409,
-          "PENDING_CHANGE_PLAN_INACTIVE",
         );
       }
 
@@ -250,7 +286,7 @@ export async function createSubscriptionRenewal({
       );
     }
 
-    if (!checkoutPlan.isActive) {
+    if (!isPlanChange && !checkoutPlan.isActive) {
       throw createServiceError(
         "Current subscription plan is no longer available",
         409,
@@ -272,6 +308,164 @@ export async function createSubscriptionRenewal({
         409,
         "SUBSCRIPTION_PERIOD_NOT_CONFIGURED",
       );
+    }
+
+    // A prepaid plan change is activated at the end of the current period.
+    // No new Razorpay order or payment is created.
+    if (isPlanChange) {
+      const session = await mongoose.startSession();
+
+      let activationResult;
+
+      try {
+        await session.withTransaction(async () => {
+          const currentSubscription = await Subscription.findOne({
+            _id: subscription._id,
+            organization: organizationId,
+          }).session(session);
+
+          if (!currentSubscription) {
+            throw createServiceError(
+              "Organization subscription was not found",
+              404,
+              "SUBSCRIPTION_NOT_FOUND",
+            );
+          }
+
+          const currentPendingChange = currentSubscription.pendingChange;
+
+          if (
+            !currentPendingChange ||
+            String(currentPendingChange.billingPayment) !==
+              String(pendingChange.billingPayment._id) ||
+            String(currentPendingChange.plan) !==
+              String(pendingChange.plan._id) ||
+            currentPendingChange.billingInterval !==
+              pendingChange.billingInterval
+          ) {
+            throw createServiceError(
+              "Scheduled plan change details have changed",
+              409,
+              "PENDING_CHANGE_DETAILS_MISMATCH",
+            );
+          }
+
+          const effectiveAt = new Date(currentSubscription.currentPeriodEnd);
+
+          if (
+            !currentPendingChange.effectiveAt ||
+            currentPendingChange.effectiveAt.getTime() !== effectiveAt.getTime()
+          ) {
+            throw createServiceError(
+              "Scheduled plan change period does not match the subscription period",
+              409,
+              "PENDING_CHANGE_PERIOD_MISMATCH",
+            );
+          }
+
+          if (effectiveAt > new Date()) {
+            throw createServiceError(
+              "Scheduled plan change is not due yet",
+              409,
+              "PENDING_PLAN_CHANGE_NOT_DUE",
+            );
+          }
+
+          const prepaidPayment = await BillingPayment.findOne({
+            _id: currentPendingChange.billingPayment,
+            organization: organizationId,
+            subscription: currentSubscription._id,
+            plan: currentPendingChange.plan,
+            paymentType: "plan_change",
+            billingInterval: currentPendingChange.billingInterval,
+            status: "captured",
+          }).session(session);
+
+          if (!prepaidPayment) {
+            throw createServiceError(
+              "Prepaid plan change payment could not be verified",
+              409,
+              "PREPAID_PLAN_CHANGE_PAYMENT_NOT_FOUND",
+            );
+          }
+
+          if (
+            !["active", "past_due", "expired"].includes(
+              currentSubscription.status,
+            )
+          ) {
+            throw createServiceError(
+              "Subscription is not eligible for scheduled plan activation",
+              409,
+              "SUBSCRIPTION_NOT_ELIGIBLE_FOR_PLAN_CHANGE",
+            );
+          }
+
+          if (currentSubscription.cancelAtPeriodEnd) {
+            throw createServiceError(
+              "Subscription cancellation is scheduled",
+              409,
+              "SUBSCRIPTION_CANCELLATION_SCHEDULED",
+            );
+          }
+
+          const nextPeriodEnd = calculatePeriodEnd(
+            effectiveAt,
+            currentPendingChange.billingInterval,
+          );
+
+          // Activate using the already captured prepaid payment.
+          // Do not create another BillingPayment or Razorpay order.
+          currentSubscription.plan = currentPendingChange.plan;
+          currentSubscription.billingInterval =
+            currentPendingChange.billingInterval;
+
+          currentSubscription.status = "active";
+          currentSubscription.currentPeriodStart = effectiveAt;
+          currentSubscription.currentPeriodEnd = nextPeriodEnd;
+          currentSubscription.nextBillingAt = nextPeriodEnd;
+
+          currentSubscription.gracePeriodEndsAt = null;
+          currentSubscription.cancelAtPeriodEnd = false;
+          currentSubscription.canceledAt = null;
+
+          currentSubscription.pendingChange = null;
+
+          currentSubscription.lastPaymentAt =
+            prepaidPayment.paidAt || new Date();
+
+          await currentSubscription.save({ session });
+
+          activationResult = {
+            payment: {
+              id: prepaidPayment._id,
+              type: prepaidPayment.paymentType,
+              status: prepaidPayment.status,
+              amountPaise: prepaidPayment.amountPaise,
+              currency: prepaidPayment.currency,
+            },
+
+            subscription: {
+              id: currentSubscription._id,
+              plan: currentPendingChange.plan,
+              billingInterval: currentPendingChange.billingInterval,
+              status: currentSubscription.status,
+              currentPeriodStart: effectiveAt,
+              currentPeriodEnd: nextPeriodEnd,
+            },
+
+            planChangeActivated: true,
+            alreadyPaid: true,
+            additionalPaymentRequired: false,
+          };
+        });
+      } finally {
+        await session.endSession();
+      }
+
+      await heartbeat.assertOwnership();
+
+      return activationResult;
     }
 
     const selectedPrice = checkoutPlan.prices?.[checkoutBillingInterval];

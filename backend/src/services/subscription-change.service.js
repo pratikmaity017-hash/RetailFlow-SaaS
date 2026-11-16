@@ -1,15 +1,41 @@
+import BillingPayment from "../models/billing-payment.model.js";
 import Subscription from "../models/subscription.model.js";
 import SubscriptionPlan from "../models/subscription-plan.model.js";
 
+import { env } from "../config/env.js";
+import { createRazorpayOrder } from "./razorpay.service.js";
 import { createServiceError } from "../utils/service-error.util.js";
-
-import BillingPayment from "../models/billing-payment.model.js";
 
 import {
   acquireSubscriptionOperationLock,
   startSubscriptionOperationLockHeartbeat,
   releaseSubscriptionOperationLock,
 } from "../utils/subscription-operation-lock.util.js";
+
+function buildPlanChangeCheckout({ billingPayment, razorpayOrder, plan }) {
+  return {
+    payment: {
+      id: billingPayment._id,
+      type: billingPayment.paymentType,
+      amountPaise: billingPayment.amountPaise,
+      currency: billingPayment.currency,
+      status: billingPayment.status,
+    },
+
+    checkout: {
+      keyId: env.RAZORPAY_KEY_ID,
+      orderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      plan: {
+        code: plan.code,
+        name: plan.name,
+      },
+      billingInterval: billingPayment.billingInterval,
+      paymentType: "plan_change",
+    },
+  };
+}
 
 export async function requestSubscriptionPlanChange({
   organizationId,
@@ -30,6 +56,7 @@ export async function requestSubscriptionPlanChange({
   });
 
   const heartbeat = startSubscriptionOperationLockHeartbeat(lock);
+
   try {
     const subscription = await Subscription.findOne({
       _id: lock.subscriptionId,
@@ -58,7 +85,7 @@ export async function requestSubscriptionPlanChange({
       throw createServiceError(
         400,
         "SUBSCRIPTION_NOT_ACTIVE",
-        "Only active subscriptions can schedule a plan change",
+        "Only active subscriptions can change plans",
       );
     }
 
@@ -75,28 +102,6 @@ export async function requestSubscriptionPlanChange({
         409,
         "PLAN_CHANGE_ALREADY_PENDING",
         "A subscription plan change is already scheduled",
-      );
-    }
-
-    const unresolvedPayment = await BillingPayment.exists({
-      organization: organizationId,
-      status: {
-        $in: [
-          "pending",
-          "authorized",
-          "cancellation_pending",
-          "refund_pending",
-        ],
-      },
-    });
-
-    await heartbeat.assertOwnership();
-
-    if (unresolvedPayment) {
-      throw createServiceError(
-        409,
-        "UNRESOLVED_PAYMENT_EXISTS",
-        "Resolve the existing payment before scheduling a plan change",
       );
     }
 
@@ -124,9 +129,13 @@ export async function requestSubscriptionPlanChange({
       );
     }
 
-    const requestedPrice = requestedPlan.prices?.[billingInterval];
+    const selectedPrice = requestedPlan.prices?.[billingInterval];
 
-    if (!requestedPrice) {
+    if (
+      !selectedPrice ||
+      !Number.isSafeInteger(selectedPrice.amountPaise) ||
+      selectedPrice.amountPaise <= 0
+    ) {
       throw createServiceError(
         400,
         "PLAN_PRICE_UNAVAILABLE",
@@ -145,26 +154,155 @@ export async function requestSubscriptionPlanChange({
       );
     }
 
-    subscription.pendingChange = {
-      plan: requestedPlan._id,
-      billingInterval,
-      effectiveAt: subscription.currentPeriodEnd,
-    };
+    const unresolvedPayment = await BillingPayment.exists({
+      subscription: subscription._id,
+      status: {
+        $in: [
+          "pending",
+          "authorized",
+          "cancellation_pending",
+          "refund_pending",
+        ],
+      },
+    });
 
     await heartbeat.assertOwnership();
 
-    await subscription.save();
+    if (unresolvedPayment) {
+      throw createServiceError(
+        409,
+        "UNRESOLVED_PAYMENT_EXISTS",
+        "Resolve the existing payment before changing the subscription plan",
+      );
+    }
 
-    return {
-      pendingChange: {
-        plan: {
-          code: requestedPlan.code,
-          name: requestedPlan.name,
+    // Save the local payment record before creating the Razorpay order.
+    let billingPayment;
+
+    try {
+      [billingPayment] = await BillingPayment.create([
+        {
+          organization: organizationId,
+          subscription: subscription._id,
+          plan: requestedPlan._id,
+          paymentType: "plan_change",
+          amountPaise: selectedPrice.amountPaise,
+          currency: selectedPrice.currency || "INR",
+          billingInterval,
+          status: "pending",
+          orderCreationStatus: "creating",
+          gateway: "razorpay",
         },
-        billingInterval,
-        effectiveAt: subscription.pendingChange.effectiveAt,
+      ]);
+    } catch (error) {
+      if (error.code === 11000) {
+        throw createServiceError(
+          409,
+          "PLAN_CHANGE_PAYMENT_ALREADY_PENDING",
+          "A payment is already being processed for this subscription",
+        );
+      }
+
+      throw error;
+    }
+
+    let razorpayOrder;
+
+    try {
+      await heartbeat.assertOwnership();
+
+      razorpayOrder = await createRazorpayOrder({
+        amountPaise: billingPayment.amountPaise,
+        currency: billingPayment.currency,
+        receipt: billingPayment._id.toString(),
+        notes: {
+          billingPaymentId: billingPayment._id.toString(),
+          organizationId: organizationId.toString(),
+          planCode: requestedPlan.code,
+          billingInterval,
+          paymentType: "plan_change",
+        },
+      });
+    } catch (error) {
+      const outcomeUnknown = error.outcomeUnknown === true;
+
+      await BillingPayment.updateOne(
+        {
+          _id: billingPayment._id,
+          status: "pending",
+          orderCreationStatus: "creating",
+        },
+        {
+          $set: {
+            orderCreationStatus: outcomeUnknown ? "unknown" : "failed",
+            ...(outcomeUnknown
+              ? {
+                  failureReason: "RAZORPAY_ORDER_CREATION_OUTCOME_UNKNOWN",
+                }
+              : {
+                  status: "failed",
+                  failureReason:
+                    error.code || "PLAN_CHANGE_ORDER_CREATION_FAILED",
+                }),
+          },
+        },
+      ).catch((saveError) => {
+        console.error(
+          "Could not update plan change payment state:",
+          saveError.message,
+        );
+      });
+
+      throw error;
+    }
+
+    const savedPayment = await BillingPayment.findOneAndUpdate(
+      {
+        _id: billingPayment._id,
+        status: "pending",
+        orderCreationStatus: "creating",
       },
-    };
+      {
+        $set: {
+          razorpayOrderId: razorpayOrder.id,
+          orderCreationStatus: "created",
+          failureReason: null,
+        },
+      },
+      {
+        returnDocument: "after",
+      },
+    );
+
+    if (!savedPayment) {
+      await BillingPayment.updateOne(
+        {
+          _id: billingPayment._id,
+          status: "pending",
+        },
+        {
+          $set: {
+            orderCreationStatus: "unknown",
+            failureReason:
+              "RAZORPAY_ORDER_CREATED_BUT_NOT_CONFIRMED_IN_DATABASE",
+          },
+        },
+      ).catch(() => {});
+
+      throw createServiceError(
+        409,
+        "PLAN_CHANGE_ORDER_SAVE_FAILED",
+        "Payment order was created but could not be confirmed. Please recover the payment before retrying.",
+      );
+    }
+
+    await heartbeat.assertOwnership();
+
+    return buildPlanChangeCheckout({
+      billingPayment: savedPayment,
+      razorpayOrder,
+      plan: requestedPlan,
+    });
   } finally {
     heartbeat.stop();
     await releaseSubscriptionOperationLock(lock);

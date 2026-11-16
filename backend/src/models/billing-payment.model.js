@@ -24,7 +24,7 @@ const billingPaymentSchema = new mongoose.Schema(
 
     paymentType: {
       type: String,
-      enum: ["initial", "renewal"],
+      enum: ["initial", "renewal", "plan_change"],
       default: "initial",
       required: true,
       index: true,

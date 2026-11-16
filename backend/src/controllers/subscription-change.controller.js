@@ -10,7 +10,7 @@ export async function requestSubscriptionPlanChangeController(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: "Subscription plan change scheduled successfully",
+      message: "Plan change payment checkout created successfully",
       data: result,
     });
   } catch (error) {
