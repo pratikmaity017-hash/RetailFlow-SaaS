@@ -42,6 +42,7 @@ export default function CustomerListPage() {
   const [reactivatingCustomerId, setReactivatingCustomerId] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
   const [isSuccessVisible, setIsSuccessVisible] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -183,6 +184,22 @@ export default function CustomerListPage() {
     };
   }, [selectedOrganizationId, search, statusFilter, currentPage]);
 
+  useEffect(() => {
+    if (!confirmationAction) return;
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setConfirmationAction(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [confirmationAction]);
+
   const selectedOrganization = organizations.find(
     (item) => item.organization.id === selectedOrganizationId,
   );
@@ -218,13 +235,14 @@ export default function CustomerListPage() {
     setCurrentPage(1);
   }
 
+  function openCustomerConfirmation(type, customer) {
+    setConfirmationAction({
+      type,
+      customer,
+    });
+  }
+
   async function handleDeactivateCustomer(customer) {
-    const confirmed = window.confirm(
-      `Are you sure you want to deactivate "${customer.name}"?`,
-    );
-
-    if (!confirmed) return;
-
     try {
       setActionError("");
       setActionSuccess("");
@@ -260,11 +278,6 @@ export default function CustomerListPage() {
   }
 
   async function handleReactivateCustomer(customer) {
-    const confirmed = window.confirm(
-      `Are you sure you want to reactivate "${customer.name}"?`,
-    );
-
-    if (!confirmed) return;
     try {
       setActionError("");
       setActionSuccess("");
@@ -542,7 +555,10 @@ export default function CustomerListPage() {
                                 type="button"
                                 className="customer-deactivate-button"
                                 onClick={() =>
-                                  handleDeactivateCustomer(customer)
+                                  openCustomerConfirmation(
+                                    "deactivate",
+                                    customer,
+                                  )
                                 }
                                 disabled={
                                   deactivatingCustomerId === customer._id
@@ -559,7 +575,10 @@ export default function CustomerListPage() {
                                 type="button"
                                 className="customer-reactivate-button"
                                 onClick={() =>
-                                  handleReactivateCustomer(customer)
+                                  openCustomerConfirmation(
+                                    "reactivate",
+                                    customer,
+                                  )
                                 }
                                 disabled={
                                   reactivatingCustomerId === customer._id
@@ -606,6 +625,88 @@ export default function CustomerListPage() {
             </>
           )}
         </section>
+      )}
+
+      {confirmationAction && (
+        <div
+          className="customer-confirm-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmationAction(null);
+            }
+          }}
+        >
+          <div
+            className="customer-confirm-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="customer-confirm-title"
+            aria-describedby="customer-confirm-description"
+          >
+            <div
+              className={`customer-confirm-icon ${
+                confirmationAction.type === "deactivate" ? "danger" : "success"
+              }`}
+            >
+              {confirmationAction.type === "deactivate" ? "!" : "✓"}
+            </div>
+
+            <h2 id="customer-confirm-title">
+              {confirmationAction.type === "deactivate"
+                ? "Deactivate Customer?"
+                : "Reactivate Customer?"}
+            </h2>
+
+            <p id="customer-confirm-description">
+              Are you sure you want to{" "}
+              {confirmationAction.type === "deactivate"
+                ? "deactivate"
+                : "reactivate"}{" "}
+              <strong>{confirmationAction.customer.name}</strong>?
+            </p>
+
+            <div className="customer-confirm-actions">
+              <button
+                type="button"
+                className="customer-confirm-cancel"
+                onClick={() => setConfirmationAction(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className={`customer-confirm-submit ${
+                  confirmationAction.type === "deactivate"
+                    ? "danger"
+                    : "success"
+                }`}
+                onClick={() => {
+                  const { type, customer } = confirmationAction;
+
+                  if (
+                    deactivatingCustomerId === customer._id ||
+                    reactivatingCustomerId === customer._id
+                  ) {
+                    return;
+                  }
+
+                  setConfirmationAction(null);
+
+                  if (type === "deactivate") {
+                    handleDeactivateCustomer(customer);
+                  } else {
+                    handleReactivateCustomer(customer);
+                  }
+                }}
+              >
+                {confirmationAction.type === "deactivate"
+                  ? "Deactivate"
+                  : "Reactivate"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
