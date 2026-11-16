@@ -41,8 +41,28 @@ export default function CustomerListPage() {
   const [deactivatingCustomerId, setDeactivatingCustomerId] = useState("");
   const [reactivatingCustomerId, setReactivatingCustomerId] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  const [isSuccessVisible, setIsSuccessVisible] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (!actionSuccess) return;
+
+    setIsSuccessVisible(true);
+
+    const hideTimer = window.setTimeout(() => {
+      setIsSuccessVisible(false);
+    }, 3500);
+
+    const clearTimer = window.setTimeout(() => {
+      setActionSuccess("");
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [actionSuccess]);
 
   // Load organizations available to the authenticated user.
   useEffect(() => {
@@ -207,9 +227,12 @@ export default function CustomerListPage() {
 
     try {
       setActionError("");
+      setActionSuccess("");
       setDeactivatingCustomerId(customer._id);
 
       await deactivateCustomer(selectedOrganizationId, customer._id);
+
+      setActionSuccess(`${customer.name} has been deactivated successfully.`);
 
       if (statusFilter === "all") {
         // Keep the customer visible, but update its status.
@@ -237,6 +260,11 @@ export default function CustomerListPage() {
   }
 
   async function handleReactivateCustomer(customer) {
+    const confirmed = window.confirm(
+      `Are you sure you want to reactivate "${customer.name}"?`,
+    );
+
+    if (!confirmed) return;
     try {
       setActionError("");
       setActionSuccess("");
@@ -379,9 +407,28 @@ export default function CustomerListPage() {
           {actionError}
         </div>
       )}
+
       {actionSuccess && (
-        <div className="customer-success-alert" role="status">
-          {actionSuccess}
+        <div
+          className={`customer-toast ${isSuccessVisible ? "show" : "hide"}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="customer-toast-icon">✓</span>
+
+          <span className="customer-toast-message">{actionSuccess}</span>
+
+          <button
+            type="button"
+            className="customer-toast-close"
+            aria-label="Dismiss notification"
+            onClick={() => {
+              setIsSuccessVisible(false);
+              setActionSuccess("");
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
 
