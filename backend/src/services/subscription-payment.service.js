@@ -745,6 +745,64 @@ async function activateOrHandleStaleRenewal({
   }
 }
 
+export async function recoverPendingPaymentReconciliations({
+  batchSize = 10,
+} = {}) {
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) {
+    throw createServiceError(
+      "Invalid reconciliation batch size",
+      400,
+      "INVALID_RECONCILIATION_BATCH_SIZE",
+    );
+  }
+
+  const pendingPayments = await BillingPayment.find({
+    status: "captured",
+    "reconciliation.status": "pending",
+    razorpayPaymentId: { $exists: true, $ne: null },
+  })
+    .sort({ "reconciliation.requiredAt": 1, createdAt: 1 })
+    .limit(batchSize);
+
+  const result = {
+    checked: pendingPayments.length,
+    processed: 0,
+    failed: 0,
+    skipped: 0,
+  };
+
+  for (const billingPayment of pendingPayments) {
+    try {
+      const recoveryResult = await activateOrHandleStaleRenewal({
+        organizationId: billingPayment.organization,
+        billingPayment,
+        paymentId: billingPayment.razorpayPaymentId,
+      });
+
+      if (
+        recoveryResult.reconciliationStatus === "resolved" ||
+        recoveryResult.refundRequired ||
+        recoveryResult.refundStatus
+      ) {
+        result.processed += 1;
+      } else if (recoveryResult.reconciliationRequired) {
+        result.failed += 1;
+      } else {
+        result.skipped += 1;
+      }
+    } catch (error) {
+      result.failed += 1;
+
+      console.error(
+        `Payment reconciliation failed for ${billingPayment._id}:`,
+        error.message,
+      );
+    }
+  }
+
+  return result;
+}
+
 export async function verifySubscriptionPayment({
   organizationId,
   orderId,
