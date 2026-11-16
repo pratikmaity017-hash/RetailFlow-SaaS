@@ -27,10 +27,32 @@ import User from "../models/user.model.js";
 
 const router = Router();
 
+function useRefreshCookie(req, res, next) {
+  if (!req.body?.refreshToken && req.cookies?.refreshToken) {
+    req.body.refreshToken = req.cookies.refreshToken;
+  }
+
+  // A web visitor without a refresh cookie is simply unauthenticated.
+  if (!req.body?.refreshToken && req.get("X-Client-Type") === "web") {
+    return res.status(401).json({
+      success: false,
+      message: "Refresh session is unavailable.",
+      code: "INVALID_REFRESH_TOKEN",
+    });
+  }
+
+  next();
+}
+
 router.post("/register", validate(registerSchema), register);
 router.post("/login", validate(loginSchema), login);
 router.post("/google", validate(googleLoginSchema), googleLogin);
-router.post("/refresh", validate(refreshTokenSchema), refresh);
+router.post(
+  "/refresh",
+  useRefreshCookie,
+  validate(refreshTokenSchema),
+  refresh,
+);
 
 router.post(
   "/email-verification/send",

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 
 import healthRoute from "./routes/health.route.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
@@ -21,6 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const app = express();
+app.use(cookieParser());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,8 +49,9 @@ app.use(
 
       return callback(new Error("Origin not allowed by CORS"));
     },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Client-Type"],
   }),
 );
 

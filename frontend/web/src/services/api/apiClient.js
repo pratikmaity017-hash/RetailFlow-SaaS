@@ -1,56 +1,59 @@
 import axios from "axios";
 
-import {
-  clearTokens,
-  getAccessToken,
-  getRefreshToken,
-  saveTokens,
-} from "./tokenStorage";
+import { clearTokens, getAccessToken, saveTokens } from "./tokenStorage";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
+    "X-Client-Type": "web",
   },
   timeout: 15000,
+  withCredentials: true,
 });
 
 // Share one refresh request between simultaneous API failures.
 let refreshPromise = null;
 
 async function refreshAccessToken() {
-  const refreshToken = getRefreshToken();
-
-  if (!refreshToken) {
-    throw new Error("Refresh token is unavailable.");
-  }
-
   const baseURL = import.meta.env.VITE_API_URL.replace(/\/+$/, "");
 
   const response = await axios.post(
     `${baseURL}/api/auth/refresh`,
-    { refreshToken },
+    {},
     {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        "X-Client-Type": "web",
       },
       timeout: 15000,
+      withCredentials: true,
     },
   );
 
   const tokens = response.data?.data?.tokens;
 
-  if (!tokens?.accessToken || !tokens?.refreshToken) {
+  if (!tokens?.accessToken) {
     throw new Error("Invalid token refresh response.");
   }
 
-  // Save both tokens because the backend rotates refresh tokens.
   saveTokens(tokens);
 
   return tokens.accessToken;
 }
+
+apiClient.interceptors.request.use((config) => {
+  const accessToken = getAccessToken();
+
+  if (accessToken) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return config;
+});
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -101,7 +104,6 @@ apiClient.interceptors.response.use(
 
         if (isInvalidSession) {
           clearTokens();
-
           window.dispatchEvent(new Event("retailflow:auth-expired"));
         }
 

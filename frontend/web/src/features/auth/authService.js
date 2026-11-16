@@ -12,11 +12,9 @@ export async function loginUser(credentials) {
   return response.data;
 }
 
-// Refresh the access token using the refresh token.
-export async function refreshUserSession(refreshToken) {
-  const response = await apiClient.post("/api/auth/refresh", {
-    refreshToken,
-  });
+// Refresh the access token using the HttpOnly refresh cookie.
+export async function refreshUserSession() {
+  const response = await apiClient.post("/api/auth/refresh", {});
 
   return response.data;
 }

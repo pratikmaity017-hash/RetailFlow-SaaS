@@ -12,6 +12,12 @@ import {
   verifyEmailVerificationToken,
 } from "../services/email-verification.service.js";
 
+import {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  isWebClient,
+} from "../utils/auth-cookie.util.js";
+
 export async function register(req, res, next) {
   try {
     const result = await registerUser(req.body);
@@ -34,6 +40,21 @@ export async function login(req, res, next) {
       ipAddress: req.ip,
     });
 
+    if (isWebClient(req)) {
+      setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        data: {
+          ...result,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
+        },
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -52,6 +73,21 @@ export async function googleLogin(req, res, next) {
       ipAddress: req.ip,
     });
 
+    if (isWebClient(req)) {
+      setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        message: "Google login successful",
+        data: {
+          ...result,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
+        },
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Google login successful",
@@ -66,12 +102,24 @@ export async function refresh(req, res, next) {
   try {
     const result = await refreshAccessToken(req.body);
 
+    if (isWebClient(req)) {
+      setRefreshTokenCookie(res, result.refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        message: "Token refreshed successfully",
+        data: {
+          tokens: {
+            accessToken: result.accessToken,
+          },
+        },
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
-      data: {
-        tokens: result,
-      },
+      data: { tokens: result },
     });
   } catch (error) {
     next(error);
@@ -84,6 +132,10 @@ export async function logout(req, res, next) {
       userId: req.auth.userId,
       sessionId: req.auth.sessionId,
     });
+
+    if (isWebClient(req)) {
+      clearRefreshTokenCookie(res);
+    }
 
     return res.status(200).json({
       success: true,
@@ -99,6 +151,10 @@ export async function logoutAll(req, res, next) {
     const result = await logoutAllSessions({
       userId: req.auth.userId,
     });
+
+    if (isWebClient(req)) {
+      clearRefreshTokenCookie(res);
+    }
 
     return res.status(200).json({
       success: true,

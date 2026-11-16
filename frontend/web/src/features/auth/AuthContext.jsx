@@ -6,7 +6,6 @@ import { getCurrentUser, logoutUser, refreshUserSession } from "./authService";
 import {
   clearTokens,
   getAccessToken,
-  getRefreshToken,
   saveTokens,
 } from "../../services/api/tokenStorage";
 
@@ -15,15 +14,9 @@ let sessionRestorePromise = null;
 async function restoreSession() {
   if (!sessionRestorePromise) {
     sessionRestorePromise = (async () => {
-      const refreshToken = getRefreshToken();
-
-      if (!refreshToken) {
-        clearTokens();
-        return { user: null, error: null };
-      }
-
       try {
-        const response = await refreshUserSession(refreshToken);
+        // The browser automatically sends the HttpOnly refresh cookie.
+        const response = await refreshUserSession();
         const tokens = response.data.tokens;
 
         saveTokens(tokens);
@@ -32,16 +25,15 @@ async function restoreSession() {
 
         return { user: userResponse.data, error: null };
       } catch (error) {
-        const status = error.response?.status;
+        const status = error.status || error.response?.status;
 
-        // Clear tokens only when the server confirms
-        // that the authentication session is invalid.
+        // The server confirms that the refresh session is invalid.
         if (status === 401 || status === 403) {
           clearTokens();
           return { user: null, error: null };
         }
 
-        // Preserve tokens for network and server errors.
+        // Preserve the session when the server is temporarily unavailable.
         return {
           user: null,
           error: error.message || "Unable to connect to the server.",
@@ -65,7 +57,7 @@ export function AuthProvider({ children }) {
     setIsRetrying(true);
 
     try {
-       const [result] = await Promise.all([
+      const [result] = await Promise.all([
         restoreSession(),
         new Promise((resolve) => window.setTimeout(resolve, 600)),
       ]);
