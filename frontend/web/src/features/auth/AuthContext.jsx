@@ -64,11 +64,17 @@ export function AuthProvider({ children }) {
   const retrySessionRestore = useCallback(async () => {
     setIsRetrying(true);
 
-    const result = await restoreSession();
+    try {
+      const [result] = await Promise.all([
+        restoreSession(),
+        new Promise((resolve) => window.setTimeout(resolve, 600)),
+      ]);
 
-    setUser(result.user);
-    setAuthError(result.error || "");
-    setIsRetrying(false);
+      setUser(result.user);
+      setAuthError(result.error || "");
+    } finally {
+      setIsRetrying(false);
+    }
   }, []);
 
   useEffect(() => {
