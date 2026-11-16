@@ -4,6 +4,9 @@ import {
   getSubscriptionPlans,
   getSubscriptionUsage,
   getSubscriptionPayments,
+  changeSubscriptionPlan,
+  cancelSubscription,
+  resumeSubscription,
 } from "../subscriptionService";
 import { getOrganizationContext } from "../../organization/organizationService";
 
@@ -81,9 +84,56 @@ export default function SubscriptionPage() {
   const [usage, setUsage] = useState(null);
   const [payments, setPayments] = useState([]);
   const [userRole, setUserRole] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function handleCancelSubscription() {
+    const confirmed = window.confirm(
+      "Your subscription will remain active until the current billing period ends. Continue?",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setActionMessage("");
+
+      await cancelSubscription(localStorage.getItem(ORGANIZATION_STORAGE_KEY));
+
+      setActionMessage("Subscription cancellation scheduled successfully.");
+      window.location.reload();
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message || "Failed to cancel subscription.",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleResumeSubscription() {
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setActionMessage("");
+
+      await resumeSubscription(localStorage.getItem(ORGANIZATION_STORAGE_KEY));
+
+      setActionMessage("Subscription resumed successfully.");
+      window.location.reload();
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message || "Failed to resume subscription.",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -231,6 +281,38 @@ export default function SubscriptionPage() {
               </strong>
             </div>
           </div>
+
+          {isOwner && isPaidPlan && (
+            <div className="subscription-actions">
+              {cancellationScheduled ? (
+                <button
+                  type="button"
+                  className="subscription-action-button subscription-action-button--primary"
+                  onClick={handleResumeSubscription}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? "Please wait..." : "Resume Subscription"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="subscription-action-button subscription-action-button--danger"
+                  onClick={handleCancelSubscription}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? "Please wait..." : "Cancel Subscription"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {actionMessage && (
+            <p className="subscription-action-message">{actionMessage}</p>
+          )}
+
+          {actionError && (
+            <p className="subscription-action-error">{actionError}</p>
+          )}
 
           {currentSubscription?.pendingChange && (
             <div className="subscription-pending-change">

@@ -390,3 +390,53 @@
     padding: 12px 14px;
   }
 }
+
+.subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.subscription-action-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.subscription-action-button:hover {
+  opacity: 0.85;
+}
+
+.subscription-action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.subscription-action-button--primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.subscription-action-button--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.subscription-action-message,
+.subscription-action-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.subscription-action-message {
+  color: #15803d;
+}
+
+.subscription-action-error {
+  color: #b91c1c;
+}
