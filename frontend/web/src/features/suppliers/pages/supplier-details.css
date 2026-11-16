@@ -1,0 +1,121 @@
+.supplier-details-page {
+  width: 100%;
+  padding: 24px;
+  color: #1e293b;
+}
+
+.supplier-details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.supplier-details-header h1 {
+  margin: 18px 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.supplier-details-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.supplier-details-header button,
+.supplier-details-page > button {
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.supplier-details-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.supplier-details-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.supplier-details-status.inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.supplier-details-card {
+  margin-bottom: 20px;
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.supplier-details-card h2 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.supplier-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 30px;
+}
+
+.supplier-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.supplier-detail-item span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.supplier-detail-item strong {
+  overflow-wrap: anywhere;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.supplier-details-error {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+@media (max-width: 768px) {
+  .supplier-details-page {
+    padding: 16px;
+  }
+
+  .supplier-details-header {
+    flex-direction: column;
+  }
+
+  .supplier-details-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .supplier-details-card {
+    padding: 18px;
+  }
+}

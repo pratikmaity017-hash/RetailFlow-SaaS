@@ -20,6 +20,9 @@ import CustomerListPage from "../features/customers/pages/CustomerListPage";
 import CreateCustomerPage from "../features/customers/pages/CreateCustomerPage";
 import EditCustomerPage from "../features/customers/pages/EditCustomerPage";
 import CustomerDetailsPage from "../features/customers/pages/CustomerDetailsPage";
+import SupplierListPage from "../features/suppliers/pages/SupplierListPage";
+import SupplierCreatePage from "../features/suppliers/pages/SupplierCreatePage";
+import SupplierDetailsPage from "../features/suppliers/pages/SupplierDetailsPage";
 
 import AppLayout from "../layouts/AppLayout";
 import AppLoader from "../shared/components/AppLoader";
@@ -171,6 +174,13 @@ function AppRoutes() {
         <Route
           path="/customers/:customerId"
           element={<CustomerDetailsPage />}
+        />
+
+        <Route path="/suppliers" element={<SupplierListPage />} />
+        <Route path="/suppliers/new" element={<SupplierCreatePage />} />
+        <Route
+          path="/suppliers/:supplierId"
+          element={<SupplierDetailsPage />}
         />
       </Route>
 
