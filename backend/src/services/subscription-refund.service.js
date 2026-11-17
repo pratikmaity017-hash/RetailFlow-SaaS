@@ -1,5 +1,8 @@
 import BillingPayment from "../models/billing-payment.model.js";
-import { createRazorpayRefund } from "./razorpay.service.js";
+import {
+  createRazorpayRefund,
+  fetchRazorpayRefund,
+} from "./razorpay.service.js";
 
 const MAX_REFUND_RETRIES = 8;
 
@@ -37,6 +40,74 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
   const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
 
   const retryCount = payment.refundRetryCount ?? 0;
+
+  // An existing Razorpay refund must be checked, never recreated.
+  if (payment.razorpayRefundId) {
+    const existingRefund = await fetchRazorpayRefund(payment.razorpayRefundId);
+
+    if (
+      existingRefund.paymentId !== payment.razorpayPaymentId ||
+      existingRefund.amount !== payment.amountPaise ||
+      existingRefund.currency !== payment.currency
+    ) {
+      throw createServiceError(
+        "Existing Razorpay refund details do not match the billing payment",
+        409,
+        "REFUND_DETAILS_MISMATCH",
+      );
+    }
+
+    const refundProcessed = existingRefund.status === "processed";
+    const refundFailed = existingRefund.status === "failed";
+
+    const update = {
+      refundStatus: existingRefund.status,
+      refundProcessingAt: null,
+      refundManualReviewRequired: refundFailed,
+    };
+
+    if (refundProcessed) {
+      update.status = "refunded";
+      update.refundedAt = new Date();
+    }
+
+    const updatedPayment = await BillingPayment.findOneAndUpdate(
+      {
+        _id: payment._id,
+        status: "refund_pending",
+        razorpayRefundId: existingRefund.id,
+        refundStatus: payment.refundStatus,
+        refundManualReviewRequired: { $ne: true },
+      },
+      {
+        $set: update,
+      },
+      { new: true },
+    );
+
+    if (!updatedPayment) {
+      const latestPayment = await BillingPayment.findById(payment._id);
+
+      if (latestPayment?.status === "refunded") {
+        return { refunded: true, duplicate: true };
+      }
+
+      return {
+        refunded: false,
+        stateChanged: true,
+        refundStatus: latestPayment?.refundStatus ?? "unknown",
+        processing: latestPayment?.refundStatus === "processing",
+      };
+    }
+
+    return {
+      refunded: updatedPayment.status === "refunded",
+      refundStatus: updatedPayment.refundStatus,
+      refundId: existingRefund.id,
+      refundManualReviewRequired: updatedPayment.refundManualReviewRequired,
+      existingRefund: true,
+    };
+  }
 
   if (payment.refundManualReviewRequired) {
     return {
@@ -91,7 +162,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     {
       _id: payment._id,
       status: "refund_pending",
-      refundManualReviewRequired: { $ne: true },
       $and: [
         {
           $or: [
@@ -136,8 +206,10 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     };
   }
 
+  let refund;
+
   try {
-    const refund = await createRazorpayRefund({
+    refund = await createRazorpayRefund({
       paymentId: claimedPayment.razorpayPaymentId,
       idempotencyKey: `retailflow-${claimedPayment._id}`,
       notes: {
@@ -145,45 +217,21 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
         reason: "Cancelled renewal checkout was captured",
       },
     });
-
-    const refundProcessed = refund.status === "processed";
-    const refundFailed = refund.status === "failed";
-
-    const update = {
-      razorpayRefundId: refund.id,
-      refundStatus: refundProcessed
-        ? "processed"
-        : refundFailed
-          ? "failed"
-          : "pending",
-      refundProcessingAt: null,
-      refundManualReviewRequired:
-        !refundProcessed &&
-        (refundFailed ||
-          (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES),
-    };
-
-    if (refundProcessed) {
-      update.status = "refunded";
-      update.refundedAt = new Date();
+  } catch (error) {
+    // An unknown outcome must remain processing.
+    // Recovery will retry with the same idempotency key.
+    if (error.outcomeUnknown) {
+      throw error;
     }
 
+    // Only a definitive API rejection is marked failed.
     await BillingPayment.updateOne(
-      { _id: claimedPayment._id, status: "refund_pending" },
       {
-        $set: update,
+        _id: claimedPayment._id,
+        status: "refund_pending",
+        refundStatus: "processing",
+        refundProcessingAt: claimedPayment.refundProcessingAt,
       },
-    );
-
-    return {
-      refunded: refundProcessed,
-      refundStatus: update.refundStatus,
-      refundId: refund.id,
-      refundManualReviewRequired: update.refundManualReviewRequired,
-    };
-  } catch (error) {
-    await BillingPayment.updateOne(
-      { _id: claimedPayment._id, status: "refund_pending" },
       {
         $set: {
           refundStatus: "failed",
@@ -196,6 +244,60 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
 
     throw error;
   }
+
+  // Database persistence is deliberately outside the API catch.
+  // If this fails, the processing claim remains for later recovery.
+  const refundProcessed = refund.status === "processed";
+  const refundFailed = refund.status === "failed";
+
+  const update = {
+    razorpayRefundId: refund.id,
+    refundStatus: refund.status,
+    refundProcessingAt: null,
+    refundManualReviewRequired:
+      !refundProcessed &&
+      (refundFailed ||
+        (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES),
+  };
+
+  if (refundProcessed) {
+    update.status = "refunded";
+    update.refundedAt = new Date();
+  }
+
+  const updatedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: claimedPayment._id,
+      status: "refund_pending",
+      refundStatus: "processing",
+      refundProcessingAt: claimedPayment.refundProcessingAt,
+    },
+    {
+      $set: update,
+    },
+    { new: true },
+  );
+
+  if (!updatedPayment) {
+    const latestPayment = await BillingPayment.findById(claimedPayment._id);
+
+    if (latestPayment?.status === "refunded") {
+      return { refunded: true, duplicate: true };
+    }
+
+    return {
+      refunded: false,
+      stateChanged: true,
+      refundStatus: latestPayment?.refundStatus ?? "unknown",
+    };
+  }
+
+  return {
+    refunded: updatedPayment.status === "refunded",
+    refundStatus: updatedPayment.refundStatus,
+    refundId: refund.id,
+    refundManualReviewRequired: updatedPayment.refundManualReviewRequired,
+  };
 }
 
 export async function processRefundWebhook({ eventType, refund }) {
@@ -247,15 +349,34 @@ export async function processRefundWebhook({ eventType, refund }) {
     );
   }
 
-  if (payment.status === "refunded") {
-    return { updated: false, duplicate: true, status: "refunded" };
+  // Never allow a different refund to update this payment.
+  if (payment.razorpayRefundId && payment.razorpayRefundId !== refund.id) {
+    throw createServiceError(
+      "Refund ID does not match the existing billing refund",
+      409,
+      "REFUND_ID_MISMATCH",
+    );
   }
 
   const isProcessed = eventType === "refund.processed";
+  const expectedRefundStatus = isProcessed ? "processed" : "failed";
+
+  // Already processed webhook or completed refund.
+  if (
+    payment.status === "refunded" ||
+    payment.refundStatus === expectedRefundStatus
+  ) {
+    return {
+      updated: false,
+      duplicate: true,
+      status: payment.status,
+      refundStatus: payment.refundStatus,
+    };
+  }
 
   const update = {
     razorpayRefundId: refund.id,
-    refundStatus: isProcessed ? "processed" : "failed",
+    refundStatus: expectedRefundStatus,
     refundProcessingAt: null,
     refundManualReviewRequired: !isProcessed,
   };
@@ -269,16 +390,29 @@ export async function processRefundWebhook({ eventType, refund }) {
     {
       _id: payment._id,
       status: "refund_pending",
+      refundStatus: payment.refundStatus,
+      $or: [{ razorpayRefundId: refund.id }, { razorpayRefundId: null }],
     },
-    { $set: update },
+    {
+      $set: update,
+    },
     { new: true },
   );
 
   if (!updatedPayment) {
     const latestPayment = await BillingPayment.findById(payment._id);
 
-    if (latestPayment?.status === "refunded") {
-      return { updated: false, duplicate: true, status: "refunded" };
+    if (
+      latestPayment?.razorpayRefundId === refund.id &&
+      (latestPayment.status === "refunded" ||
+        latestPayment.refundStatus === expectedRefundStatus)
+    ) {
+      return {
+        updated: false,
+        duplicate: true,
+        status: latestPayment.status,
+        refundStatus: latestPayment.refundStatus,
+      };
     }
 
     throw createServiceError(
@@ -306,6 +440,7 @@ export async function recoverPendingRenewalRefunds({ batchSize = 10 } = {}) {
       status: "refund_pending",
       refundManualReviewRequired: { $ne: true },
       refundRetryCount: { $gte: MAX_REFUND_RETRIES },
+      razorpayRefundId: { $in: [null, ""] },
       $or: [
         { refundStatus: { $ne: "processing" } },
         { refundProcessingAt: { $lte: staleBefore } },

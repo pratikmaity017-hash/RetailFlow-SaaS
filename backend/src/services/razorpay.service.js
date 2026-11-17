@@ -237,20 +237,29 @@ export async function createRazorpayRefund({
     throw error;
   }
 
-  const response = await fetch(
-    `${RAZORPAY_API_BASE_URL}/payments/${encodeURIComponent(paymentId)}/refund`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: getRazorpayAuthorization(),
-        "Content-Type": "application/json",
-        "X-Refund-Idempotency": idempotencyKey,
+  let response;
+
+  try {
+    response = await fetch(
+      `${RAZORPAY_API_BASE_URL}/payments/${encodeURIComponent(paymentId)}/refund`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: getRazorpayAuthorization(),
+          "Content-Type": "application/json",
+          "X-Refund-Idempotency": idempotencyKey,
+        },
+        body: JSON.stringify({ notes }),
+        signal: AbortSignal.timeout(15000),
       },
-      // No amount means full refund.
-      body: JSON.stringify({ notes }),
-      signal: AbortSignal.timeout(15000),
-    },
-  );
+    );
+  } catch (cause) {
+    const error = new Error("Refund creation outcome is unknown", { cause });
+    error.statusCode = 503;
+    error.code = "PAYMENT_REFUND_OUTCOME_UNKNOWN";
+    error.outcomeUnknown = true;
+    throw error;
+  }
 
   const result = await response.json().catch(() => null);
 
@@ -261,8 +270,84 @@ export async function createRazorpayRefund({
     });
 
     const error = new Error("Unable to create payment refund");
+    error.statusCode = response.status >= 500 ? 503 : 502;
+    error.code =
+      response.status >= 500
+        ? "PAYMENT_REFUND_OUTCOME_UNKNOWN"
+        : "PAYMENT_REFUND_CREATION_FAILED";
+    error.outcomeUnknown = response.status >= 500;
+    throw error;
+  }
+
+  if (
+    !result?.id ||
+    result.payment_id !== paymentId ||
+    !Number.isSafeInteger(result.amount) ||
+    !result.currency ||
+    !["pending", "processed", "failed"].includes(result.status)
+  ) {
+    const error = new Error(
+      "Razorpay refund response is invalid or incomplete",
+    );
     error.statusCode = 502;
-    error.code = "PAYMENT_REFUND_CREATION_FAILED";
+    error.code = "PAYMENT_REFUND_RESPONSE_INVALID";
+    error.outcomeUnknown = true;
+    throw error;
+  }
+
+  return {
+    id: result.id,
+    paymentId: result.payment_id,
+    amount: result.amount,
+    currency: result.currency,
+    status: result.status,
+  };
+}
+
+export async function fetchRazorpayRefund(refundId) {
+  if (!refundId || typeof refundId !== "string") {
+    const error = new Error("Valid Razorpay refund ID is required");
+    error.statusCode = 400;
+    error.code = "INVALID_RAZORPAY_REFUND_ID";
+    throw error;
+  }
+
+  const response = await fetch(
+    `${RAZORPAY_API_BASE_URL}/refunds/${encodeURIComponent(refundId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: getRazorpayAuthorization(),
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Razorpay refund fetch failed:", {
+      status: response.status,
+      code: result?.error?.code,
+    });
+
+    const error = new Error("Unable to retrieve Razorpay refund");
+    error.statusCode = 502;
+    error.code = "RAZORPAY_REFUND_FETCH_FAILED";
+    throw error;
+  }
+
+  if (
+    result?.id !== refundId ||
+    !result?.payment_id ||
+    !Number.isSafeInteger(result.amount) ||
+    !result.currency ||
+    !["pending", "processed", "failed"].includes(result.status)
+  ) {
+    const error = new Error("Razorpay returned an invalid refund response");
+    error.statusCode = 502;
+    error.code = "RAZORPAY_REFUND_RESPONSE_INVALID";
     throw error;
   }
 
