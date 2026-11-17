@@ -77,7 +77,6 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
         status: "refund_pending",
         razorpayRefundId: existingRefund.id,
         refundStatus: payment.refundStatus,
-        refundManualReviewRequired: { $ne: true },
       },
       {
         $set: update,
