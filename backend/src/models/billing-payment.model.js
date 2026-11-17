@@ -135,6 +135,45 @@ const billingPaymentSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+
+      attemptCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 8,
+      },
+
+      lastAttemptAt: {
+        type: Date,
+        default: null,
+      },
+
+      nextAttemptAt: {
+        type: Date,
+        default: null,
+      },
+
+      lastErrorCode: {
+        type: String,
+        trim: true,
+        maxlength: 100,
+        default: null,
+      },
+
+      manualReviewRequired: {
+        type: Boolean,
+        default: false,
+      },
+
+      claimToken: {
+        type: String,
+        default: null,
+      },
+
+      claimExpiresAt: {
+        type: Date,
+        default: null,
+      },
     },
 
     refundRetryCount: {
@@ -201,6 +240,19 @@ billingPaymentSchema.index(
       },
     },
     name: "uniq_unresolved_payment_per_subscription",
+  },
+);
+
+billingPaymentSchema.index(
+  {
+    status: 1,
+    "reconciliation.status": 1,
+    "reconciliation.manualReviewRequired": 1,
+    "reconciliation.nextAttemptAt": 1,
+    "reconciliation.claimExpiresAt": 1,
+  },
+  {
+    name: "payment_reconciliation_worker_idx",
   },
 );
 
