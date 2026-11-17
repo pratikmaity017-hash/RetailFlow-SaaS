@@ -1171,10 +1171,23 @@ export async function recoverPendingPaymentReconciliations({
     "reconciliation.status": "pending",
     "reconciliation.manualReviewRequired": { $ne: true },
     razorpayPaymentId: { $exists: true, $ne: null },
-    $or: [
-      { "reconciliation.nextAttemptAt": null },
-      { "reconciliation.nextAttemptAt": { $exists: false } },
-      { "reconciliation.nextAttemptAt": { $lte: now } },
+    $and: [
+      {
+        $or: [
+          { "reconciliation.nextAttemptAt": null },
+          { "reconciliation.nextAttemptAt": { $exists: false } },
+          { "reconciliation.nextAttemptAt": { $lte: now } },
+        ],
+      },
+      {
+        $or: [
+          { "reconciliation.claimToken": null },
+          { "reconciliation.claimToken": { $exists: false } },
+          { "reconciliation.claimExpiresAt": null },
+          { "reconciliation.claimExpiresAt": { $exists: false } },
+          { "reconciliation.claimExpiresAt": { $lte: now } },
+        ],
+      },
     ],
   })
     .sort({
