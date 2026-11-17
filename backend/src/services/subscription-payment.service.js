@@ -25,7 +25,7 @@ const MAX_RECONCILIATION_ATTEMPTS = 8;
 
 const RECONCILIATION_BASE_DELAY_MS = 60 * 1000; // 1 minute
 const RECONCILIATION_MAX_DELAY_MS = 60 * 60 * 1000; // 1 hour
-const RECONCILIATION_CLAIM_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const RECONCILIATION_CLAIM_DURATION_MS = 5 * 60 * 1000; // 2 minutes
 
 const PERMANENT_RECONCILIATION_ERRORS = new Set([
   "BILLING_PAYMENT_NOT_FOUND",
@@ -309,6 +309,82 @@ async function claimPaymentReconciliation(billingPaymentId) {
   };
 }
 
+async function extendPaymentReconciliationClaim({
+  billingPaymentId,
+  claimToken,
+}) {
+  const now = new Date();
+
+  const updatedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: billingPaymentId,
+      status: "captured",
+      "reconciliation.status": "pending",
+      "reconciliation.claimToken": claimToken,
+      "reconciliation.claimExpiresAt": { $gt: now },
+    },
+    {
+      $set: {
+        "reconciliation.claimExpiresAt": new Date(
+          now.getTime() + RECONCILIATION_CLAIM_DURATION_MS,
+        ),
+      },
+    },
+    { new: true },
+  );
+
+  return Boolean(updatedPayment);
+}
+
+function startPaymentReconciliationHeartbeat({ billingPaymentId, claimToken }) {
+  let stopped = false;
+  let heartbeatRunning = false;
+  let leaseLost = false;
+
+  const interval = setInterval(async () => {
+    if (stopped || heartbeatRunning || leaseLost) {
+      return;
+    }
+
+    heartbeatRunning = true;
+
+    try {
+      const extended = await extendPaymentReconciliationClaim({
+        billingPaymentId,
+        claimToken,
+      });
+
+      if (!extended) {
+        leaseLost = true;
+
+        console.error(
+          `[Payment Reconciliation] Claim lease lost: ${billingPaymentId}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[Payment Reconciliation] Heartbeat failed: ${billingPaymentId}`,
+        error,
+      );
+    } finally {
+      heartbeatRunning = false;
+    }
+  }, 60 * 1000);
+
+  interval.unref?.();
+
+  return {
+    stop() {
+      stopped = true;
+      clearInterval(interval);
+    },
+
+    hasLostLease() {
+      return leaseLost;
+    },
+  };
+}
+
 async function releasePaymentReconciliationClaim({
   billingPaymentId,
   claimToken,
@@ -470,6 +546,7 @@ async function activateSubscription({
   organizationId,
   billingPayment,
   paymentId,
+  claimToken,
 }) {
   // Step 1: Persist captured payment outside the subscription transaction.
   const persistedPayment = await persistCapturedPayment({
@@ -501,6 +578,28 @@ async function activateSubscription({
   try {
     try {
       await session.withTransaction(async () => {
+        if (!claimToken) {
+          const error = new Error("PAYMENT_RECONCILIATION_CLAIM_LOST");
+          error.code = "PAYMENT_RECONCILIATION_CLAIM_LOST";
+          throw error;
+        }
+
+        const ownedClaim = await BillingPayment.findOne({
+          _id: billingPayment._id,
+          status: "captured",
+          "reconciliation.status": "pending",
+          "reconciliation.claimToken": claimToken,
+          "reconciliation.claimExpiresAt": {
+            $gt: new Date(),
+          },
+        }).session(session);
+
+        if (!ownedClaim) {
+          const error = new Error("PAYMENT_RECONCILIATION_CLAIM_LOST");
+          error.code = "PAYMENT_RECONCILIATION_CLAIM_LOST";
+          throw error;
+        }
+
         const currentPayment = await BillingPayment.findOne({
           _id: persistedPayment._id,
           organization: organizationId,
@@ -715,13 +814,40 @@ async function activateSubscription({
           currentPayment.billingInterval,
         );
 
-        // The payment was already persisted as captured.
-        // Only mark reconciliation resolved when subscription changes succeed.
-        currentPayment.reconciliation = {
-          status: "resolved",
-          reason: null,
-          requiredAt: currentPayment.reconciliation?.requiredAt || null,
-          resolvedAt: now,
+        const resolveClaimedPayment = async () => {
+          const resolvedAt = new Date();
+
+          const updateResult = await BillingPayment.updateOne(
+            {
+              _id: currentPayment._id,
+              organization: organizationId,
+              status: "captured",
+              razorpayPaymentId: paymentId,
+              "reconciliation.status": "pending",
+              "reconciliation.claimToken": claimToken,
+              "reconciliation.claimExpiresAt": {
+                $gt: resolvedAt,
+              },
+            },
+            {
+              $set: {
+                "reconciliation.status": "resolved",
+                "reconciliation.reason": null,
+                "reconciliation.resolvedAt": resolvedAt,
+              },
+              $unset: {
+                "reconciliation.claimToken": "",
+                "reconciliation.claimExpiresAt": "",
+              },
+            },
+            { session },
+          );
+
+          if (updateResult.modifiedCount !== 1) {
+            const error = new Error("PAYMENT_RECONCILIATION_CLAIM_LOST");
+            error.code = "PAYMENT_RECONCILIATION_CLAIM_LOST";
+            throw error;
+          }
         };
 
         // A paid plan change is prepaid and scheduled.
@@ -737,7 +863,7 @@ async function activateSubscription({
           };
 
           await subscription.save({ session });
-          await currentPayment.save({ session });
+          await resolveClaimedPayment();
 
           result = {
             alreadyVerified: false,
@@ -769,7 +895,7 @@ async function activateSubscription({
         subscription.lastPaymentAt = now;
 
         await subscription.save({ session });
-        await currentPayment.save({ session });
+        await resolveClaimedPayment();
 
         result = {
           alreadyVerified: false,
@@ -786,6 +912,18 @@ async function activateSubscription({
       // Preserve the existing stale-renewal refund handling.
       if (error.code === "STALE_RENEWAL_PAYMENT") {
         throw error;
+      }
+
+      if (error.code === "PAYMENT_RECONCILIATION_CLAIM_LOST") {
+        return {
+          alreadyVerified: false,
+          paymentId: billingPayment._id,
+          subscriptionId: billingPayment.subscription,
+          status: "captured",
+          reconciliationRequired: true,
+          reconciliationStatus: "pending",
+          claimInProgress: true,
+        };
       }
 
       // Payment is already captured. Do not roll it back or mark it failed.
@@ -898,37 +1036,124 @@ async function activateOrHandleStaleRenewal({
   billingPayment,
   paymentId,
 }) {
-  try {
-    return await activateSubscription({
+  // Ensure the captured payment is persisted before acquiring a claim.
+  const persistedPayment = await persistCapturedPayment({
+    organizationId,
+    billingPayment,
+    paymentId,
+  });
+
+  // Already completed: no new claim is necessary.
+  if (
+    ["resolved", "not_required"].includes(
+      persistedPayment.reconciliation?.status,
+    )
+  ) {
+    return activateSubscription({
       organizationId,
-      billingPayment,
+      billingPayment: persistedPayment,
       paymentId,
     });
-  } catch (error) {
-    if (
-      error.code !== "STALE_RENEWAL_PAYMENT" ||
-      billingPayment.paymentType !== "renewal"
-    ) {
-      throw error;
-    }
+  }
 
-    const result = await markStaleRenewalForRefund({
-      billingPayment,
-      paymentId,
-    });
+  const claim = await claimPaymentReconciliation(persistedPayment._id);
 
-    if (result.refundRequired) {
-      const refundResult = await processCancelledRenewalRefund({
-        billingPaymentId: result.billingPaymentId,
-      });
+  if (!claim) {
+    const latestPayment = await BillingPayment.findById(persistedPayment._id);
 
+    if (!latestPayment) {
       return {
-        ...result,
-        refundResult,
+        alreadyVerified: false,
+        paymentId: persistedPayment._id,
+        reconciliationRequired: false,
+        claimInProgress: false,
       };
     }
 
-    return result;
+    const reconciliation = latestPayment.reconciliation;
+    const now = new Date();
+
+    if (reconciliation?.status === "resolved") {
+      return {
+        alreadyVerified: true,
+        paymentId: latestPayment._id,
+        subscriptionId: latestPayment.subscription,
+        status: latestPayment.status,
+        reconciliationStatus: "resolved",
+      };
+    }
+
+    const claimInProgress = Boolean(
+      reconciliation?.claimToken &&
+      reconciliation?.claimExpiresAt &&
+      reconciliation.claimExpiresAt > now,
+    );
+
+    const retryScheduled = Boolean(
+      reconciliation?.nextAttemptAt && reconciliation.nextAttemptAt > now,
+    );
+
+    return {
+      alreadyVerified: false,
+      paymentId: latestPayment._id,
+      subscriptionId: latestPayment.subscription,
+      status: latestPayment.status,
+      reconciliationRequired: latestPayment.status === "captured",
+      reconciliationStatus: reconciliation?.status || "pending",
+      claimInProgress,
+      retryScheduled,
+      manualReviewRequired: reconciliation?.manualReviewRequired === true,
+    };
+  }
+
+  const { billingPayment: claimedPayment, claimToken } = claim;
+
+  const heartbeat = startPaymentReconciliationHeartbeat({
+    billingPaymentId: claimedPayment._id,
+    claimToken,
+  });
+
+  try {
+    try {
+      return await activateSubscription({
+        organizationId,
+        billingPayment: claimedPayment,
+        paymentId,
+        claimToken,
+      });
+    } catch (error) {
+      if (
+        error.code !== "STALE_RENEWAL_PAYMENT" ||
+        claimedPayment.paymentType !== "renewal"
+      ) {
+        throw error;
+      }
+
+      const result = await markStaleRenewalForRefund({
+        billingPayment: claimedPayment,
+        paymentId,
+      });
+
+      if (result.refundRequired) {
+        const refundResult = await processCancelledRenewalRefund({
+          billingPaymentId: result.billingPaymentId,
+        });
+
+        return {
+          ...result,
+          refundResult,
+        };
+      }
+
+      return result;
+    }
+  } finally {
+    heartbeat.stop();
+
+    await releasePaymentReconciliationClaim({
+      billingPaymentId: claimedPayment._id,
+      claimToken,
+    });
   }
 }
 
@@ -936,11 +1161,7 @@ export async function recoverPendingPaymentReconciliations({
   batchSize = 10,
 } = {}) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) {
-    throw createServiceError(
-      "Invalid reconciliation batch size",
-      400,
-      "INVALID_RECONCILIATION_BATCH_SIZE",
-    );
+    throw new Error("INVALID_RECONCILIATION_BATCH_SIZE");
   }
 
   const now = new Date();
@@ -956,9 +1177,11 @@ export async function recoverPendingPaymentReconciliations({
       { "reconciliation.nextAttemptAt": { $lte: now } },
     ],
   })
-    .sort({ "reconciliation.requiredAt": 1, createdAt: 1 })
-    .limit(batchSize)
-    .select("_id");
+    .sort({
+      "reconciliation.requiredAt": 1,
+      createdAt: 1,
+    })
+    .limit(batchSize);
 
   const result = {
     checked: pendingPayments.length,
@@ -967,49 +1190,43 @@ export async function recoverPendingPaymentReconciliations({
     skipped: 0,
   };
 
-  for (const candidate of pendingPayments) {
-    let claim = null;
-
+  for (const billingPayment of pendingPayments) {
     try {
-      claim = await claimPaymentReconciliation(candidate._id);
+      const recoveryResult = await activateOrHandleStaleRenewal({
+        organizationId: billingPayment.organization,
+        billingPayment,
+        paymentId: billingPayment.razorpayPaymentId,
+      });
 
-      if (!claim) {
-        result.skipped += 1;
+      if (
+        recoveryResult.claimInProgress ||
+        recoveryResult.retryScheduled ||
+        recoveryResult.manualReviewRequired
+      ) {
+        result.skipped++;
         continue;
       }
 
-      const { billingPayment, claimToken } = claim;
-
-      try {
-        const recoveryResult = await activateOrHandleStaleRenewal({
-          organizationId: billingPayment.organization,
-          billingPayment,
-          paymentId: billingPayment.razorpayPaymentId,
-        });
-
-        if (
-          recoveryResult.reconciliationStatus === "resolved" ||
-          recoveryResult.refundRequired ||
-          recoveryResult.refundStatus
-        ) {
-          result.processed += 1;
-        } else if (recoveryResult.reconciliationRequired) {
-          result.failed += 1;
-        } else {
-          result.skipped += 1;
-        }
-      } finally {
-        await releasePaymentReconciliationClaim({
-          billingPaymentId: billingPayment._id,
-          claimToken,
-        });
+      if (recoveryResult.reconciliationStatus === "resolved") {
+        result.processed++;
+        continue;
       }
+
+      if (
+        recoveryResult.reconciliationRequired ||
+        recoveryResult.refundRequired
+      ) {
+        result.failed++;
+        continue;
+      }
+
+      result.skipped++;
     } catch (error) {
-      result.failed += 1;
+      result.failed++;
 
       console.error(
-        `Payment reconciliation failed for ${candidate._id}:`,
-        error.message,
+        `[Payment Reconciliation] Failed for ${billingPayment._id}:`,
+        error,
       );
     }
   }
