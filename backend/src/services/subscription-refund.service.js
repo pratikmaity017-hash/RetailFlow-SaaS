@@ -210,6 +210,8 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
   try {
     refund = await createRazorpayRefund({
       paymentId: claimedPayment.razorpayPaymentId,
+      amountPaise: claimedPayment.amountPaise,
+      currency: claimedPayment.currency,
       idempotencyKey: `retailflow-${claimedPayment._id}`,
       notes: {
         billingPaymentId: String(claimedPayment._id),
@@ -242,6 +244,45 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     );
 
     throw error;
+  }
+
+  if (
+    refund.paymentId !== claimedPayment.razorpayPaymentId ||
+    refund.amount !== claimedPayment.amountPaise ||
+    refund.currency !== claimedPayment.currency
+  ) {
+    const mismatchPayment = await BillingPayment.findOneAndUpdate(
+      {
+        _id: claimedPayment._id,
+        status: "refund_pending",
+        refundStatus: "processing",
+        refundProcessingAt: claimedPayment.refundProcessingAt,
+      },
+      {
+        $set: {
+          razorpayRefundId: refund.id,
+          refundStatus: refund.status,
+          refundProcessingAt: null,
+          refundManualReviewRequired: true,
+        },
+      },
+      { new: true },
+    );
+
+    if (!mismatchPayment) {
+      throw createServiceError(
+        "Refund response mismatch and payment state changed",
+        409,
+        "REFUND_RESPONSE_STATE_CONFLICT",
+      );
+    }
+
+    return {
+      refunded: false,
+      manualReviewRequired: true,
+      refundId: refund.id,
+      refundStatus: mismatchPayment.refundStatus,
+    };
   }
 
   // Database persistence is deliberately outside the API catch.

@@ -225,18 +225,24 @@ export async function fetchRazorpayOrder(orderId) {
 
 export async function createRazorpayRefund({
   paymentId,
+  amountPaise,
+  currency = "INR",
   idempotencyKey,
   notes = {},
 }) {
-  if (!paymentId || !idempotencyKey) {
-    const error = new Error(
-      "Payment ID and refund idempotency key are required",
-    );
+  if (
+    !paymentId ||
+    !idempotencyKey ||
+    !Number.isSafeInteger(amountPaise) ||
+    amountPaise <= 0 ||
+    !currency
+  ) {
+    const error = new Error("Invalid refund request");
     error.statusCode = 400;
     error.code = "INVALID_REFUND_REQUEST";
     throw error;
   }
-
+  const authorization = getRazorpayAuthorization();
   let response;
 
   try {
@@ -245,11 +251,14 @@ export async function createRazorpayRefund({
       {
         method: "POST",
         headers: {
-          Authorization: getRazorpayAuthorization(),
+          Authorization: authorization,
           "Content-Type": "application/json",
           "X-Refund-Idempotency": idempotencyKey,
         },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({
+          amount: amountPaise,
+          notes,
+        }),
         signal: AbortSignal.timeout(15000),
       },
     );
@@ -280,10 +289,10 @@ export async function createRazorpayRefund({
   }
 
   if (
-    !result?.id ||
+    typeof result?.id !== "string" ||
+    typeof result?.currency !== "string" ||
     result.payment_id !== paymentId ||
     !Number.isSafeInteger(result.amount) ||
-    !result.currency ||
     !["pending", "processed", "failed"].includes(result.status)
   ) {
     const error = new Error(
@@ -339,10 +348,11 @@ export async function fetchRazorpayRefund(refundId) {
   }
 
   if (
-    result?.id !== refundId ||
+    typeof result?.id !== "string" ||
+    result.id !== refundId ||
+    typeof result?.currency !== "string" ||
     !result?.payment_id ||
     !Number.isSafeInteger(result.amount) ||
-    !result.currency ||
     !["pending", "processed", "failed"].includes(result.status)
   ) {
     const error = new Error("Razorpay returned an invalid refund response");
