@@ -253,10 +253,7 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     razorpayRefundId: refund.id,
     refundStatus: refund.status,
     refundProcessingAt: null,
-    refundManualReviewRequired:
-      !refundProcessed &&
-      (refundFailed ||
-        (claimedPayment.refundRetryCount ?? 0) >= MAX_REFUND_RETRIES),
+    refundManualReviewRequired: refundFailed,
   };
 
   if (refundProcessed) {
@@ -363,7 +360,8 @@ export async function processRefundWebhook({ eventType, refund }) {
   // Already processed webhook or completed refund.
   if (
     payment.status === "refunded" ||
-    payment.refundStatus === expectedRefundStatus
+    (payment.refundStatus === expectedRefundStatus &&
+      payment.razorpayRefundId === refund.id)
   ) {
     return {
       updated: false,
