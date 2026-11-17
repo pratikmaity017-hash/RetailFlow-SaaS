@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { randomUUID } from "node:crypto";
 
 import BillingPayment from "../models/billing-payment.model.js";
 import Subscription from "../models/subscription.model.js";
@@ -18,6 +19,35 @@ function createServiceError(message, statusCode, code) {
   error.statusCode = statusCode;
   error.code = code;
   return error;
+}
+
+const MAX_RECONCILIATION_ATTEMPTS = 8;
+
+const RECONCILIATION_BASE_DELAY_MS = 60 * 1000; // 1 minute
+const RECONCILIATION_MAX_DELAY_MS = 60 * 60 * 1000; // 1 hour
+const RECONCILIATION_CLAIM_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+
+const PERMANENT_RECONCILIATION_ERRORS = new Set([
+  "BILLING_PAYMENT_NOT_FOUND",
+  "SUBSCRIPTION_NOT_FOUND",
+  "INVALID_CAPTURED_PAYMENT_STATE",
+  "INVALID_BILLING_PAYMENT_TYPE",
+  "INVALID_BILLING_INTERVAL",
+  "INITIAL_PAYMENT_SUBSCRIPTION_MISMATCH",
+  "PLAN_CHANGE_SUBSCRIPTION_MISMATCH",
+  "PLAN_CHANGE_SUBSCRIPTION_NOT_ACTIVE",
+  "PLAN_CHANGE_CANCELLATION_SCHEDULED",
+  "PLAN_CHANGE_ALREADY_PENDING",
+  "PLAN_CHANGE_PERIOD_EXPIRED",
+  "SAME_SUBSCRIPTION_PLAN",
+  "PENDING_CHANGE_PLAN_NOT_FOUND",
+  "PENDING_PLAN_CHANGE_NOT_DUE",
+  "PENDING_PLAN_CHANGE_PAYMENT_MISMATCH",
+  "RENEWAL_PAYMENT_PLAN_MISMATCH",
+]);
+
+function isPermanentReconciliationError(error) {
+  return PERMANENT_RECONCILIATION_ERRORS.has(error?.code);
 }
 
 async function reconcileRazorpayOrder(billingPayment) {
@@ -227,15 +257,92 @@ async function persistCapturedPayment({
   );
 }
 
+async function claimPaymentReconciliation(billingPaymentId) {
+  const now = new Date();
+  const claimToken = randomUUID();
+
+  const claimedPayment = await BillingPayment.findOneAndUpdate(
+    {
+      _id: billingPaymentId,
+      status: "captured",
+      "reconciliation.status": "pending",
+      "reconciliation.manualReviewRequired": { $ne: true },
+      $and: [
+        {
+          $or: [
+            { "reconciliation.nextAttemptAt": null },
+            { "reconciliation.nextAttemptAt": { $exists: false } },
+            { "reconciliation.nextAttemptAt": { $lte: now } },
+          ],
+        },
+        {
+          $or: [
+            { "reconciliation.claimToken": null },
+            { "reconciliation.claimToken": { $exists: false } },
+            { "reconciliation.claimExpiresAt": null },
+            { "reconciliation.claimExpiresAt": { $exists: false } },
+            { "reconciliation.claimExpiresAt": { $lte: now } },
+          ],
+        },
+      ],
+    },
+    {
+      $set: {
+        "reconciliation.claimToken": claimToken,
+        "reconciliation.claimExpiresAt": new Date(
+          now.getTime() + RECONCILIATION_CLAIM_DURATION_MS,
+        ),
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!claimedPayment) {
+    return null;
+  }
+
+  return {
+    billingPayment: claimedPayment,
+    claimToken,
+  };
+}
+
+async function releasePaymentReconciliationClaim({
+  billingPaymentId,
+  claimToken,
+}) {
+  await BillingPayment.updateOne(
+    {
+      _id: billingPaymentId,
+      status: "captured",
+      "reconciliation.claimToken": claimToken,
+    },
+    {
+      $set: {
+        "reconciliation.claimToken": null,
+        "reconciliation.claimExpiresAt": null,
+      },
+    },
+  );
+}
+
 async function markPaymentReconciliationPending({
   organizationId,
   billingPaymentId,
   paymentId,
   error,
 }) {
+  const now = new Date();
+
   const reason = String(
     error?.message || "Subscription activation requires reconciliation",
   ).slice(0, 500);
+
+  const errorCode = String(
+    error?.code || "PAYMENT_RECONCILIATION_FAILED",
+  ).slice(0, 100);
 
   const updatedPayment = await BillingPayment.findOneAndUpdate(
     {
@@ -245,13 +352,91 @@ async function markPaymentReconciliationPending({
       razorpayPaymentId: paymentId,
       "reconciliation.status": { $ne: "resolved" },
     },
-    {
-      $set: {
-        "reconciliation.status": "pending",
-        "reconciliation.reason": reason,
-        "reconciliation.requiredAt": new Date(),
+    [
+      {
+        $set: {
+          "reconciliation.status": "pending",
+
+          "reconciliation.reason": reason,
+
+          // Preserve the original reconciliation start time.
+          "reconciliation.requiredAt": {
+            $ifNull: ["$reconciliation.requiredAt", now],
+          },
+
+          "reconciliation.attemptCount": {
+            $add: [{ $ifNull: ["$reconciliation.attemptCount", 0] }, 1],
+          },
+
+          "reconciliation.lastAttemptAt": now,
+
+          "reconciliation.lastErrorCode": errorCode,
+
+          "reconciliation.manualReviewRequired": isPermanentReconciliationError(
+            { code: errorCode },
+          ) || {
+            $gte: [
+              {
+                $add: [{ $ifNull: ["$reconciliation.attemptCount", 0] }, 1],
+              },
+              MAX_RECONCILIATION_ATTEMPTS,
+            ],
+          },
+
+          "reconciliation.nextAttemptAt": {
+            $cond: [
+              {
+                $or: [
+                  isPermanentReconciliationError({ code: errorCode }),
+                  {
+                    $gte: [
+                      {
+                        $add: [
+                          { $ifNull: ["$reconciliation.attemptCount", 0] },
+                          1,
+                        ],
+                      },
+                      MAX_RECONCILIATION_ATTEMPTS,
+                    ],
+                  },
+                ],
+              },
+              null,
+              {
+                $let: {
+                  vars: {
+                    nextAttempt: {
+                      $add: [
+                        { $ifNull: ["$reconciliation.attemptCount", 0] },
+                        1,
+                      ],
+                    },
+                  },
+                  in: {
+                    $add: [
+                      now,
+                      {
+                        $min: [
+                          {
+                            $multiply: [
+                              RECONCILIATION_BASE_DELAY_MS,
+                              {
+                                $pow: [2, { $subtract: ["$$nextAttempt", 1] }],
+                              },
+                            ],
+                          },
+                          RECONCILIATION_MAX_DELAY_MS,
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
       },
-    },
+    ],
     {
       returnDocument: "after",
     },
@@ -665,6 +850,8 @@ async function markStaleRenewalForRefund({ billingPayment, paymentId }) {
         paidAt: billingPayment.paidAt || new Date(),
         refundStatus: "pending",
         failureReason: "STALE_RENEWAL_PAYMENT_CAPTURED",
+        "reconciliation.claimToken": null,
+        "reconciliation.claimExpiresAt": null,
       },
     },
     {
@@ -756,13 +943,22 @@ export async function recoverPendingPaymentReconciliations({
     );
   }
 
+  const now = new Date();
+
   const pendingPayments = await BillingPayment.find({
     status: "captured",
     "reconciliation.status": "pending",
+    "reconciliation.manualReviewRequired": { $ne: true },
     razorpayPaymentId: { $exists: true, $ne: null },
+    $or: [
+      { "reconciliation.nextAttemptAt": null },
+      { "reconciliation.nextAttemptAt": { $exists: false } },
+      { "reconciliation.nextAttemptAt": { $lte: now } },
+    ],
   })
     .sort({ "reconciliation.requiredAt": 1, createdAt: 1 })
-    .limit(batchSize);
+    .limit(batchSize)
+    .select("_id");
 
   const result = {
     checked: pendingPayments.length,
@@ -771,30 +967,48 @@ export async function recoverPendingPaymentReconciliations({
     skipped: 0,
   };
 
-  for (const billingPayment of pendingPayments) {
-    try {
-      const recoveryResult = await activateOrHandleStaleRenewal({
-        organizationId: billingPayment.organization,
-        billingPayment,
-        paymentId: billingPayment.razorpayPaymentId,
-      });
+  for (const candidate of pendingPayments) {
+    let claim = null;
 
-      if (
-        recoveryResult.reconciliationStatus === "resolved" ||
-        recoveryResult.refundRequired ||
-        recoveryResult.refundStatus
-      ) {
-        result.processed += 1;
-      } else if (recoveryResult.reconciliationRequired) {
-        result.failed += 1;
-      } else {
+    try {
+      claim = await claimPaymentReconciliation(candidate._id);
+
+      if (!claim) {
         result.skipped += 1;
+        continue;
+      }
+
+      const { billingPayment, claimToken } = claim;
+
+      try {
+        const recoveryResult = await activateOrHandleStaleRenewal({
+          organizationId: billingPayment.organization,
+          billingPayment,
+          paymentId: billingPayment.razorpayPaymentId,
+        });
+
+        if (
+          recoveryResult.reconciliationStatus === "resolved" ||
+          recoveryResult.refundRequired ||
+          recoveryResult.refundStatus
+        ) {
+          result.processed += 1;
+        } else if (recoveryResult.reconciliationRequired) {
+          result.failed += 1;
+        } else {
+          result.skipped += 1;
+        }
+      } finally {
+        await releasePaymentReconciliationClaim({
+          billingPaymentId: billingPayment._id,
+          claimToken,
+        });
       }
     } catch (error) {
       result.failed += 1;
 
       console.error(
-        `Payment reconciliation failed for ${billingPayment._id}:`,
+        `Payment reconciliation failed for ${candidate._id}:`,
         error.message,
       );
     }
