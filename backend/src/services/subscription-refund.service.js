@@ -461,6 +461,12 @@ export async function recoverPendingRenewalRefunds({ batchSize = 10 } = {}) {
     $and: [
       {
         $or: [
+          {
+            razorpayRefundId: {
+              $exists: true,
+              $nin: [null, ""],
+            },
+          },
           { refundRetryCount: { $lt: MAX_REFUND_RETRIES } },
           { refundRetryCount: { $exists: false } },
         ],
