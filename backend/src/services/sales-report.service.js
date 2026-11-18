@@ -280,33 +280,38 @@ export async function getSalesReport({
       { $sort: { _id: 1 } },
     ]),
 
-    SaleItem.aggregate([
+    Sale.aggregate([
       {
-        $match: {
-          organization: organizationObjectId,
-        },
+        $match: saleMatch,
       },
       {
         $lookup: {
-          from: Sale.collection.name,
-          localField: "sale",
-          foreignField: "_id",
-          as: "sale",
+          from: SaleItem.collection.name,
+          let: {
+            saleId: "$_id",
+            organizationId: organizationObjectId,
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$sale", "$$saleId"] },
+                    { $eq: ["$organization", "$$organizationId"] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "saleItems",
         },
       },
-      { $unwind: "$sale" },
-      {
-        $match: {
-          "sale.organization": organizationObjectId,
-          "sale.status": "completed",
-          "sale.createdAt": dateRange,
-        },
-      },
+      { $unwind: "$saleItems" },
       {
         $lookup: {
           from: ReturnItem.collection.name,
           let: {
-            saleItemId: "$_id",
+            saleItemId: "$saleItems._id",
             organizationId: organizationObjectId,
           },
           pipeline: [
@@ -367,19 +372,19 @@ export async function getSalesReport({
       {
         $group: {
           _id: {
-            product: "$product",
-            variant: "$variant",
-            sku: "$sku",
+            product: "$saleItems.product",
+            variant: "$saleItems.variant",
+            sku: "$saleItems.sku",
           },
-          productName: { $first: "$productName" },
-          grossQuantitySold: { $sum: "$quantity" },
+          productName: { $first: "$saleItems.productName" },
+          grossQuantitySold: { $sum: "$saleItems.quantity" },
           returnedQuantity: { $sum: "$returnedQuantity" },
           quantitySold: {
             $sum: {
-              $subtract: ["$quantity", "$returnedQuantity"],
+              $subtract: ["$saleItems.quantity", "$returnedQuantity"],
             },
           },
-          grossSalesPaise: { $sum: "$lineTotalPaise" },
+          grossSalesPaise: { $sum: "$saleItems.lineTotalPaise" },
           returnedAmountPaise: { $sum: "$returnedAmountPaise" },
         },
       },
