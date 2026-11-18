@@ -95,10 +95,23 @@ export async function createReturn({
         sale: sale._id,
         status: { $in: ACTIVE_RETURN_STATUSES },
       })
-        .select("_id")
+        .select("_id totalRefundPaise")
         .session(session);
 
       const activeReturnIds = activeReturns.map((item) => item._id);
+
+      const previousTotalRefundPaise = activeReturns.reduce(
+        (total, item) => total + item.totalRefundPaise,
+        0,
+      );
+
+      if (!Number.isSafeInteger(previousTotalRefundPaise)) {
+        throw createServiceError(
+          409,
+          "INVALID_REFUND_TOTAL",
+          "The existing return refund total is invalid",
+        );
+      }
 
       const previousReturnItems = activeReturnIds.length
         ? await ReturnItem.find({
@@ -189,6 +202,27 @@ export async function createReturn({
           400,
           "INVALID_RETURN_QUANTITY",
           "Total return quantity is invalid",
+        );
+      }
+
+      if (totalRefundPaise > 0 && sale.amountPaidPaise <= 0) {
+        throw createServiceError(
+          409,
+          "SALE_NOT_PAID",
+          "A refund cannot be created before payment is received",
+        );
+      }
+
+      const cumulativeRefundPaise = previousTotalRefundPaise + totalRefundPaise;
+
+      if (
+        !Number.isSafeInteger(cumulativeRefundPaise) ||
+        cumulativeRefundPaise > sale.amountPaidPaise
+      ) {
+        throw createServiceError(
+          409,
+          "REFUND_EXCEEDS_AMOUNT_PAID",
+          "Total return refunds cannot exceed the payment received for this sale",
         );
       }
 

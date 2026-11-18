@@ -99,6 +99,8 @@ returnSchema.index({
   createdAt: -1,
 });
 
+returnSchema.index({ organization: 1, returnNumber: 1 }, { unique: true });
+
 const Return = mongoose.model("Return", returnSchema);
 
 export default Return;
