@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import AuthIdentity from "../models/auth-identity.model.js";
 import User from "../models/user.model.js";
 import EmailVerificationToken from "../models/email-verification-token.model.js";
+import EmailVerificationRequest from "../models/email-verification-request.model.js";
 import {
   generateEmailVerificationToken,
   hashEmailVerificationToken,
@@ -103,11 +104,11 @@ export async function sendEmailVerification({ user, authIdentity }) {
 
       // Count all token records created during the last 24 hours.
       // This includes consumed and invalidated tokens.
-      const recentRequestCount = await EmailVerificationToken.countDocuments({
+      const recentRequestCount = await EmailVerificationRequest.countDocuments({
         authIdentity: authIdentity._id,
         createdAt: { $gte: rateLimitWindowStart },
       }).session(session);
-      
+
       if (recentRequestCount >= MAX_REQUESTS_PER_24_HOURS) {
         throw createVerificationError(
           "You have reached the verification email request limit. Please try again later.",
@@ -155,6 +156,16 @@ export async function sendEmailVerification({ user, authIdentity }) {
             invalidatedAt: now,
           },
         },
+        { session },
+      );
+
+      await EmailVerificationRequest.create(
+        [
+          {
+            user: user._id,
+            authIdentity: authIdentity._id,
+          },
+        ],
         { session },
       );
 
