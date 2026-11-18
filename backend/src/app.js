@@ -21,6 +21,7 @@ import returnRoutes from "./routes/return.routes.js";
 import refundRoutes from "./routes/refund.routes.js";
 import salesReportRoutes from "./routes/sales-report.routes.js";
 import razorpayWebhookRoute from "./routes/razorpay-webhook.routes.js";
+import auditLogRoutes from "./routes/audit-log.routes.js";
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +104,7 @@ app.use(
 );
 
 app.use("/api/webhooks/razorpay", razorpayWebhookRoute);
+app.use("/api/organizations/:organizationId/audit-logs", auditLogRoutes);
 
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
