@@ -455,7 +455,7 @@ export const cancelSale = async ({
           $inc: { returnRevision: 1 },
         },
         {
-          new: true,
+          returnDocument: "after",
           session,
         },
       );

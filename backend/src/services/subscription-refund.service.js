@@ -81,7 +81,7 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
       {
         $set: update,
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!updatedPayment) {
@@ -266,7 +266,7 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
           refundManualReviewRequired: true,
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!mismatchPayment) {
@@ -312,7 +312,7 @@ export async function processCancelledRenewalRefund({ billingPaymentId }) {
     {
       $set: update,
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   if (!updatedPayment) {
@@ -434,7 +434,7 @@ export async function processRefundWebhook({ eventType, refund }) {
     {
       $set: update,
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   if (!updatedPayment) {

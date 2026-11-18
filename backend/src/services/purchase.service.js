@@ -332,7 +332,7 @@ export async function orderPurchase({ organizationId, purchaseId, userId }) {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );
@@ -444,7 +444,7 @@ export async function receivePurchase({
               },
             },
             {
-              new: true,
+              returnDocument: "after",
               session,
               runValidators: true,
             },
@@ -737,7 +737,7 @@ export async function cancelPurchase({
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           runValidators: true,
           session,
         },

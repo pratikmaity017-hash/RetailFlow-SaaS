@@ -50,7 +50,7 @@ export function createRateLimiter({ name, limit, windowMs }) {
           },
           {
             upsert: true,
-            new: true,
+            returnDocument: "after",
             setDefaultsOnInsert: true,
           },
         );
@@ -71,7 +71,7 @@ export function createRateLimiter({ name, limit, windowMs }) {
             },
           },
           {
-            new: true,
+            returnDocument: "after",
           },
         );
       }

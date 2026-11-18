@@ -64,7 +64,7 @@ export async function createReturn({
           status: "completed",
         },
         { $inc: { returnRevision: 1 } },
-        { new: true, session },
+        { returnDocument: "after", session },
       );
 
       if (!sale) {
@@ -313,7 +313,7 @@ export async function approveReturn({
             ...(notes !== undefined ? { notes } : {}),
           },
         },
-        { new: true, session },
+        { returnDocument: "after", session },
       );
 
       if (!returnRecord) {
@@ -342,7 +342,7 @@ export async function approveReturn({
             $inc: { quantity: item.quantity },
             $set: { updatedBy: userId },
           },
-          { new: true, session },
+          { returnDocument: "after", session },
         );
 
         if (!inventory) {
@@ -433,7 +433,7 @@ export async function rejectReturn({
             ...(notes !== undefined ? { notes } : {}),
           },
         },
-        { new: true, runValidators: true, session },
+        { returnDocument: "after", runValidators: true, session },
       );
 
       if (!returnRecord) {

@@ -148,7 +148,7 @@ export async function acceptOrganizationInvitation({ userId, token }) {
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           session,
         },
       );

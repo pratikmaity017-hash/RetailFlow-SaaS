@@ -78,7 +78,7 @@ export async function processRefund({
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           session,
         },
       );
@@ -156,7 +156,7 @@ export async function processRefund({
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           session,
         },
       );

@@ -83,7 +83,7 @@ export async function revokeOrganizationInvitation({
       },
     },
     {
-      new: true,
+      returnDocument: "after",
     },
   );
 

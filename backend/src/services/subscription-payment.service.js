@@ -330,7 +330,7 @@ async function extendPaymentReconciliationClaim({
         ),
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   return Boolean(updatedPayment);
