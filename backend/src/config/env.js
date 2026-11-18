@@ -66,11 +66,15 @@ if (!MONGODB_URI) {
 }
 
 if (!JWT_SECRET || JWT_SECRET.length < 48) {
-  throw new Error("JWT_SECRET must contain at least 64 characters.");
+  throw new Error("JWT_SECRET must contain at least 48 characters.");
 }
 
-if (!JWT_EXPIRES_IN) {
-  throw new Error("JWT_EXPIRES_IN is required. Check your .env file.");
+const JWT_EXPIRES_IN_PATTERN = /^[1-9]\d*(s|m|h|d)$/;
+
+if (!JWT_EXPIRES_IN || !JWT_EXPIRES_IN_PATTERN.test(JWT_EXPIRES_IN)) {
+  throw new Error(
+    "JWT_EXPIRES_IN must be a positive integer followed by s, m, h, or d (e.g. 15m).",
+  );
 }
 
 if (!Number.isInteger(REFRESH_TOKEN_TTL_DAYS) || REFRESH_TOKEN_TTL_DAYS <= 0) {
