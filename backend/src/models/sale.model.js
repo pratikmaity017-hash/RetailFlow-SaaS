@@ -79,6 +79,13 @@ const saleSchema = new mongoose.Schema(
       validate: Number.isSafeInteger,
     },
 
+    returnRevision: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+
     notes: {
       type: String,
       trim: true,

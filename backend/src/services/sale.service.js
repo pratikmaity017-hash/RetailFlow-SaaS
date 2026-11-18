@@ -7,6 +7,7 @@ import Product from "../models/product.model.js";
 import ProductVariant from "../models/product-variant.model.js";
 import Inventory from "../models/inventory.model.js";
 import StockMovement from "../models/stock-movement.model.js";
+import Return from "../models/return.model.js";
 
 import { createServiceError } from "../utils/service-error.util.js";
 
@@ -423,16 +424,33 @@ export const cancelSale = async ({
 
   try {
     await session.withTransaction(async () => {
-      const sale = await Sale.findOne({
-        _id: saleId,
-        organization: organizationId,
-      }).session(session);
+      // Acquire the same Sale-level lock used by createReturn().
+      // This prevents cancellation and return creation from racing.
+      let sale = await Sale.findOneAndUpdate(
+        {
+          _id: saleId,
+          organization: organizationId,
+          status: "completed",
+        },
+        {
+          $inc: { returnRevision: 1 },
+        },
+        {
+          new: true,
+          session,
+        },
+      );
 
       if (!sale) {
-        throw createServiceError(404, "SALE_NOT_FOUND", "Sale not found");
-      }
+        const existingSale = await Sale.findOne({
+          _id: saleId,
+          organization: organizationId,
+        }).session(session);
 
-      if (sale.status !== "completed") {
+        if (!existingSale) {
+          throw createServiceError(404, "SALE_NOT_FOUND", "Sale not found");
+        }
+
         throw createServiceError(
           400,
           "SALE_ALREADY_CANCELLED",
@@ -440,9 +458,25 @@ export const cancelSale = async ({
         );
       }
 
+      // Do not cancel a sale that has an active or completed return.
+      const existingReturn = await Return.exists({
+        organization: organizationId,
+        sale: sale._id,
+        status: {
+          $in: ["pending", "approved", "completed"],
+        },
+      }).session(session);
+
+      if (existingReturn) {
+        throw createServiceError(
+          409,
+          "SALE_HAS_RETURNS",
+          "This sale has existing returns. Resolve the returns before cancelling the sale.",
+        );
+      }
+
       // Do not cancel a sale if any payment has been received.
-      // Refund handling will be implemented separately.
-      if (sale.amountPaidPaise > 0 || sale.paymentStatus !== "unpaid") {
+      if (sale.amountPaidPaise > 0) {
         throw createServiceError(
           409,
           "PAYMENT_REFUND_REQUIRED",
@@ -481,22 +515,16 @@ export const cancelSale = async ({
 
         const quantity = Number(item.quantity);
         const previousQuantity = Number(inventory.quantity);
-
         const newQuantity = Number((previousQuantity + quantity).toFixed(3));
 
-        // Restore the sold quantity.
         const inventoryUpdate = await Inventory.updateOne(
           {
             _id: inventory._id,
             organization: organizationId,
           },
           {
-            $inc: {
-              quantity,
-            },
-            $set: {
-              updatedBy: userId,
-            },
+            $inc: { quantity },
+            $set: { updatedBy: userId },
           },
           { session },
         );
@@ -509,7 +537,6 @@ export const cancelSale = async ({
           );
         }
 
-        // Keep an audit trail of the restored stock.
         await StockMovement.create(
           [
             {
@@ -536,14 +563,13 @@ export const cancelSale = async ({
         });
       }
 
-      // Cancel the sale only if it is still completed and unpaid.
       const cancellationUpdate = await Sale.updateOne(
         {
           _id: sale._id,
           organization: organizationId,
           status: "completed",
           amountPaidPaise: 0,
-          paymentStatus: "unpaid",
+          returnRevision: sale.returnRevision,
         },
         {
           $set: {
