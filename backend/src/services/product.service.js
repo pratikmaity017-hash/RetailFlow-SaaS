@@ -1,6 +1,8 @@
+import mongoose from "mongoose";
 import { createServiceError } from "../utils/service-error.util.js";
 import Product from "../models/product.model.js";
 import { withSubscriptionLimit } from "./subscription-limit.service.js";
+import { createAuditLog } from "./audit-log.service.js";
 
 // Create a product inside the authenticated organization.
 export async function createProduct({ organizationId, userId, productData }) {
@@ -19,6 +21,22 @@ export async function createProduct({ organizationId, userId, productData }) {
         ],
         { session },
       );
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "product.created",
+        resourceType: "product",
+        resourceId: product._id,
+        description: "Product created successfully",
+        metadata: {
+          name: product.name,
+          category: product.category,
+          brand: product.brand,
+          status: product.status,
+        },
+        session,
+      });
 
       return product;
     },
@@ -62,56 +80,113 @@ export async function updateProduct({
   userId,
   productData,
 }) {
-  const product = await Product.findOneAndUpdate(
-    {
-      _id: productId,
-      organization: organizationId,
-    },
-    {
-      $set: {
-        ...productData,
-        updatedBy: userId,
-      },
-    },
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
+  const session = await mongoose.startSession();
 
-  if (!product) {
-    throw createServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  let updatedProduct;
+
+  try {
+    await session.withTransaction(async () => {
+      const product = await Product.findOneAndUpdate(
+        {
+          _id: productId,
+          organization: organizationId,
+        },
+        {
+          $set: {
+            ...productData,
+            updatedBy: userId,
+          },
+        },
+        {
+          returnDocument: "after",
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!product) {
+        throw createServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
+      }
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "product.updated",
+        resourceType: "product",
+        resourceId: product._id,
+        description: "Product updated successfully",
+        metadata: {
+          name: product.name,
+          category: product.category,
+          brand: product.brand,
+          status: product.status,
+        },
+        session,
+      });
+
+      updatedProduct = product;
+    });
+
+    return updatedProduct;
+  } finally {
+    await session.endSession();
   }
-
-  return product;
 }
 
 export async function deactivateProduct({ organizationId, productId, userId }) {
-  const product = await Product.findOneAndUpdate(
-    {
-      _id: productId,
-      organization: organizationId,
-      status: "active",
-    },
-    {
-      $set: {
-        status: "inactive",
-        updatedBy: userId,
-      },
-    },
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
+  const session = await mongoose.startSession();
 
-  if (!product) {
-    throw createServiceError(
-      404,
-      "PRODUCT_NOT_FOUND",
-      "Active product not found",
-    );
+  let deactivatedProduct;
+
+  try {
+    await session.withTransaction(async () => {
+      const product = await Product.findOneAndUpdate(
+        {
+          _id: productId,
+          organization: organizationId,
+          status: "active",
+        },
+        {
+          $set: {
+            status: "inactive",
+            updatedBy: userId,
+          },
+        },
+        {
+          returnDocument: "after",
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!product) {
+        throw createServiceError(
+          404,
+          "PRODUCT_NOT_FOUND",
+          "Active product not found",
+        );
+      }
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "product.deactivated",
+        resourceType: "product",
+        resourceId: product._id,
+        description: "Product deactivated successfully",
+        metadata: {
+          name: product.name,
+          previousStatus: "active",
+          newStatus: product.status,
+        },
+        session,
+      });
+
+      deactivatedProduct = product;
+    });
+
+    return deactivatedProduct;
+  } finally {
+    await session.endSession();
   }
-
-  return product;
 }

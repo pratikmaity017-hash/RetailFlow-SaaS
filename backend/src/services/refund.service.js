@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Sale from "../models/sale.model.js";
 import Return from "../models/return.model.js";
 import Refund from "../models/refund.model.js";
+import { createAuditLog } from "./audit-log.service.js";
 
 function createServiceError(statusCode, code, message) {
   const error = new Error(message);
@@ -186,6 +187,23 @@ export async function processRefund({
         ],
         { session },
       );
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "refund.processed",
+        resourceType: "refund",
+        resourceId: refund._id,
+        description: "Customer refund recorded successfully",
+        metadata: {
+          returnId: String(updatedReturn._id),
+          saleId: String(sale._id),
+          amountPaise: refund.amountPaise,
+          method: refund.method,
+          status: refund.status,
+        },
+        session,
+      });
 
       result = {
         refund,

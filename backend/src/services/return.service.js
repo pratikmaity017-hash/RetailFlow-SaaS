@@ -7,6 +7,7 @@ import Return from "../models/return.model.js";
 import ReturnItem from "../models/return-item.model.js";
 import Inventory from "../models/inventory.model.js";
 import StockMovement from "../models/stock-movement.model.js";
+import { createAuditLog } from "./audit-log.service.js";
 
 const ACTIVE_RETURN_STATUSES = ["pending", "approved", "completed"];
 
@@ -251,6 +252,24 @@ export async function createReturn({
         })),
         { session },
       );
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "return.created",
+        resourceType: "return",
+        resourceId: createdReturn._id,
+        description: "Return request created successfully",
+        metadata: {
+          returnNumber: createdReturn.returnNumber,
+          saleId: String(sale._id),
+          totalQuantity,
+          totalRefundPaise,
+          itemCount: returnItems.length,
+          reason,
+        },
+        session,
+      });
     });
 
     return createdReturn;
@@ -362,6 +381,23 @@ export async function approveReturn({
       }
 
       await returnRecord.save({ session });
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "return.approved",
+        resourceType: "return",
+        resourceId: returnRecord._id,
+        description: "Return approved successfully",
+        metadata: {
+          returnNumber: returnRecord.returnNumber,
+          totalQuantity: returnRecord.totalQuantity,
+          totalRefundPaise: returnRecord.totalRefundPaise,
+          refundStatus: returnRecord.refundStatus,
+        },
+        session,
+      });
+
       approvedReturn = returnRecord;
     });
 
@@ -377,31 +413,57 @@ export async function rejectReturn({
   userId,
   notes,
 }) {
-  const returnRecord = await Return.findOneAndUpdate(
-    {
-      _id: returnId,
-      organization: organizationId,
-      status: "pending",
-    },
-    {
-      $set: {
-        status: "rejected",
-        refundStatus: "not_required",
-        processedBy: userId,
-        processedAt: new Date(),
-        ...(notes !== undefined ? { notes } : {}),
-      },
-    },
-    { new: true, runValidators: true },
-  );
+  const session = await mongoose.startSession();
+  let rejectedReturn;
 
-  if (!returnRecord) {
-    throw createServiceError(
-      404,
-      "PENDING_RETURN_NOT_FOUND",
-      "Pending return not found",
-    );
+  try {
+    await session.withTransaction(async () => {
+      const returnRecord = await Return.findOneAndUpdate(
+        {
+          _id: returnId,
+          organization: organizationId,
+          status: "pending",
+        },
+        {
+          $set: {
+            status: "rejected",
+            refundStatus: "not_required",
+            processedBy: userId,
+            processedAt: new Date(),
+            ...(notes !== undefined ? { notes } : {}),
+          },
+        },
+        { new: true, runValidators: true, session },
+      );
+
+      if (!returnRecord) {
+        throw createServiceError(
+          404,
+          "PENDING_RETURN_NOT_FOUND",
+          "Pending return not found",
+        );
+      }
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "return.rejected",
+        resourceType: "return",
+        resourceId: returnRecord._id,
+        description: "Return rejected successfully",
+        metadata: {
+          returnNumber: returnRecord.returnNumber,
+          totalQuantity: returnRecord.totalQuantity,
+          totalRefundPaise: returnRecord.totalRefundPaise,
+        },
+        session,
+      });
+
+      rejectedReturn = returnRecord;
+    });
+
+    return rejectedReturn;
+  } finally {
+    await session.endSession();
   }
-
-  return returnRecord;
 }

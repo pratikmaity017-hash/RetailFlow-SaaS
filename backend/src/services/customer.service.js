@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { createServiceError } from "../utils/service-error.util.js";
 import Customer from "../models/customer.model.js";
 import { withSubscriptionLimit } from "./subscription-limit.service.js";
+import { createAuditLog } from "./audit-log.service.js";
 
 // Escape user input before using it in a MongoDB regular expression.
 function escapeRegex(value) {
@@ -36,6 +37,20 @@ export async function createCustomer({ organizationId, userId, customerData }) {
         ],
         { session },
       );
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "customer.created",
+        resourceType: "customer",
+        resourceId: customer._id,
+        description: "Customer created successfully",
+        metadata: {
+          name: customer.name,
+          status: customer.status,
+        },
+        session,
+      });
 
       return customer;
     },
@@ -73,7 +88,7 @@ export async function getCustomers({
     ];
   }
 
-  const currentPage = normalizePagination(page, 1,10000);
+  const currentPage = normalizePagination(page, 1, 10000);
   const pageSize = normalizePagination(limit, 20, 100);
   const skip = (currentPage - 1) * pageSize;
 
@@ -120,70 +135,123 @@ export async function updateCustomer({
   userId,
   customerData,
 }) {
-  const customer = await Customer.findOne({
-    _id: customerId,
-    organization: organizationId,
-  });
+  const session = await mongoose.startSession();
+  let updatedCustomer;
 
-  if (!customer) {
-    throw createServiceError(404, "CUSTOMER_NOT_FOUND", "Customer not found");
+  try {
+    await session.withTransaction(async () => {
+      const customer = await Customer.findOne({
+        _id: customerId,
+        organization: organizationId,
+      }).session(session);
+
+      if (!customer) {
+        throw createServiceError(
+          404,
+          "CUSTOMER_NOT_FOUND",
+          "Customer not found",
+        );
+      }
+
+      const { address, email, ...otherFields } = customerData;
+
+      Object.assign(customer, otherFields);
+
+      if (email !== undefined) {
+        customer.email = email ?? "";
+      }
+
+      if (address !== undefined) {
+        customer.address = {
+          ...customer.address.toObject(),
+          ...address,
+        };
+      }
+
+      customer.updatedBy = userId;
+
+      await customer.save({ session });
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "customer.updated",
+        resourceType: "customer",
+        resourceId: customer._id,
+        description: "Customer updated successfully",
+        metadata: {
+          name: customer.name,
+          status: customer.status,
+        },
+        session,
+      });
+
+      updatedCustomer = customer;
+    });
+
+    return updatedCustomer;
+  } finally {
+    await session.endSession();
   }
-
-  const { address, email, ...otherFields } = customerData;
-
-  Object.assign(customer, otherFields);
-
-  // Allow the client to clear the email address using null.
-  if (email !== undefined) {
-    customer.email = email ?? "";
-  }
-
-  // Merge partial address updates instead of erasing other fields.
-  if (address !== undefined) {
-    customer.address = {
-      ...customer.address.toObject(),
-      ...address,
-    };
-  }
-
-  customer.updatedBy = userId;
-
-  await customer.save();
-
-  return customer;
 }
-
 // Soft-deactivate a customer.
 export async function deactivateCustomer({
   organizationId,
   customerId,
   userId,
 }) {
-  const customer = await Customer.findOneAndUpdate(
-    {
-      _id: customerId,
-      organization: organizationId,
-      status: "active",
-    },
-    {
-      $set: {
-        status: "inactive",
-        updatedBy: userId,
-      },
-    },
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
+  const session = await mongoose.startSession();
+  let deactivatedCustomer;
 
-  if (!customer) {
-    throw createServiceError(
-      404,
-      "CUSTOMER_NOT_FOUND",
-      "Active customer not found",
-    );
+  try {
+    await session.withTransaction(async () => {
+      const customer = await Customer.findOneAndUpdate(
+        {
+          _id: customerId,
+          organization: organizationId,
+          status: "active",
+        },
+        {
+          $set: {
+            status: "inactive",
+            updatedBy: userId,
+          },
+        },
+        {
+          returnDocument: "after",
+          runValidators: true,
+          session,
+        },
+      );
+
+      if (!customer) {
+        throw createServiceError(
+          404,
+          "CUSTOMER_NOT_FOUND",
+          "Active customer not found",
+        );
+      }
+
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "customer.deactivated",
+        resourceType: "customer",
+        resourceId: customer._id,
+        description: "Customer deactivated successfully",
+        metadata: {
+          name: customer.name,
+          previousStatus: "active",
+          newStatus: customer.status,
+        },
+        session,
+      });
+
+      deactivatedCustomer = customer;
+    });
+
+    return deactivatedCustomer;
+  } finally {
+    await session.endSession();
   }
-
-  return customer;
 }

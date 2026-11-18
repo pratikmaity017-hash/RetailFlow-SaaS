@@ -3,6 +3,7 @@ import Inventory from "../models/inventory.model.js";
 import StockMovement from "../models/stock-movement.model.js";
 import Product from "../models/product.model.js";
 import ProductVariant from "../models/product-variant.model.js";
+import { createAuditLog } from "./audit-log.service.js";
 import { createServiceError } from "../utils/service-error.util.js";
 
 export async function adjustStock({
@@ -119,6 +120,25 @@ export async function adjustStock({
         ],
         { session },
       );
+
+      // 7. Record the stock adjustment in the audit log.
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "stock.adjusted",
+        resourceType: "inventory",
+        resourceId: inventory._id,
+        description: `Stock ${type.replace("_", " ")} adjustment completed`,
+        metadata: {
+          productId: String(product._id),
+          variantId: String(variant._id),
+          type,
+          quantity: Math.abs(newQuantity - previousQuantity),
+          previousQuantity,
+          newQuantity,
+        },
+        session,
+      });
 
       result = {
         inventory,

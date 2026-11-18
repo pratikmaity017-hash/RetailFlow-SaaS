@@ -7,6 +7,8 @@ import PurchaseItem from "../models/purchase-item.model.js";
 import Supplier from "../models/supplier.model.js";
 import Product from "../models/product.model.js";
 import ProductVariant from "../models/product-variant.model.js";
+import { createAuditLog } from "./audit-log.service.js";
+
 import { createServiceError as createBaseServiceError } from "../utils/service-error.util.js";
 
 function createServiceError(message, statusCode, code) {
@@ -272,7 +274,25 @@ export async function createPurchase({
         session,
       });
 
+      // Record purchase creation in the audit log.
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "purchase.created",
+        resourceType: "purchase",
+        resourceId: purchase._id,
+        description: "Purchase created successfully",
+        metadata: {
+          supplierId: supplier._id.toString(),
+          itemCount: savedItems.length,
+          totalPaise: purchase.totalPaise,
+          status: purchase.status,
+        },
+        session,
+      });
+
       createdPurchase = purchase;
+
       createdItems = savedItems;
     });
 
@@ -593,6 +613,7 @@ export async function receivePurchase({
               Math.round(item.orderedQuantity * 1000),
           );
 
+          const previousStatus = purchase.status;
           const nextStatus = fullyReceived ? "received" : "partially_received";
 
           purchase.status = nextStatus;
@@ -600,6 +621,26 @@ export async function receivePurchase({
           purchase.updatedBy = userId;
 
           await purchase.save({ session });
+
+          // Record purchase receiving in the audit log.
+          await createAuditLog({
+            organizationId,
+            actorId: userId,
+            action: "purchase.received",
+            resourceType: "purchase",
+            resourceId: purchase._id,
+            description: "Purchase items received and inventory updated",
+            metadata: {
+              previousStatus,
+              newStatus: nextStatus,
+              receivedItemCount: items.length,
+              totalReceivedQuantity: items.reduce(
+                (total, item) => total + item.quantity,
+                0,
+              ),
+            },
+            session,
+          });
 
           updatedPurchase = purchase;
           updatedItems = allPurchaseItems;
@@ -668,6 +709,15 @@ export async function cancelPurchase({
 
   try {
     await session.withTransaction(async () => {
+      const previousPurchase = await Purchase.findOne({
+        _id: purchaseId,
+        organization: organizationId,
+      })
+        .select("status")
+        .session(session);
+
+      const previousStatus = previousPurchase?.status ?? null;
+
       const purchase = await Purchase.findOneAndUpdate(
         {
           _id: purchaseId,
@@ -716,6 +766,21 @@ export async function cancelPurchase({
           "PURCHASE_NOT_CANCELLABLE",
         );
       }
+
+      // Record purchase cancellation in the audit log.
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "purchase.cancelled",
+        resourceType: "purchase",
+        resourceId: purchase._id,
+        description: "Purchase cancelled successfully",
+        metadata: {
+          cancellationReason: purchase.cancellationReason,
+          previousStatus,
+        },
+        session,
+      });
 
       cancelledPurchase = purchase;
     });

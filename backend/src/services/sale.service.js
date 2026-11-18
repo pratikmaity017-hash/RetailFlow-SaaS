@@ -8,6 +8,7 @@ import ProductVariant from "../models/product-variant.model.js";
 import Inventory from "../models/inventory.model.js";
 import StockMovement from "../models/stock-movement.model.js";
 import Return from "../models/return.model.js";
+import { createAuditLog } from "./audit-log.service.js";
 
 import { createServiceError } from "../utils/service-error.util.js";
 
@@ -278,6 +279,24 @@ export async function createSale({ organizationId, userId, saleData }) {
 
       // 7. Save all sale item snapshots.
       const createdItems = await SaleItem.insertMany(saleItems, {
+        session,
+      });
+
+      // 8. Record sale creation in the audit log.
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "sale.created",
+        resourceType: "sale",
+        resourceId: sale._id,
+        description: "Sale created successfully",
+        metadata: {
+          totalPaise: sale.totalPaise,
+          currency: sale.currency,
+          paymentStatus: sale.paymentStatus,
+          itemCount: createdItems.length,
+          customerId: customer?._id?.toString() ?? null,
+        },
         session,
       });
 
@@ -594,6 +613,25 @@ export const cancelSale = async ({
         _id: sale._id,
         organization: organizationId,
       }).session(session);
+
+      // Record sale cancellation in the audit log.
+      await createAuditLog({
+        organizationId,
+        actorId: userId,
+        action: "sale.cancelled",
+        resourceType: "sale",
+        resourceId: sale._id,
+        description: "Sale cancelled and inventory restored",
+        metadata: {
+          reason,
+          restoredItemCount: restoredItems.length,
+          totalRestoredQuantity: restoredItems.reduce(
+            (total, item) => total + item.quantity,
+            0,
+          ),
+        },
+        session,
+      });
 
       result = {
         sale: updatedSale,
