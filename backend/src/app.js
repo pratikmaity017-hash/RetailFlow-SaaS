@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { env } from "./config/env.js";
 
 import healthRoute from "./routes/health.route.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
@@ -38,21 +39,22 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(publicDirectory));
 
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://127.0.0.1:5500",
-];
+const allowedOrigins = new Set([
+  env.FRONTEND_URL,
+  ...(env.NODE_ENV === "development"
+    ? ["http://localhost:3000", "http://127.0.0.1:5500"]
+    : []),
+]);
 
 app.use(
   cors({
     origin(origin, callback) {
       // Allow requests without an Origin header (e.g. server-side clients).
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.has(origin)) {
         return callback(null, true);
       }
 
-      return callback(new Error("Origin not allowed by CORS"));
+      return callback(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
