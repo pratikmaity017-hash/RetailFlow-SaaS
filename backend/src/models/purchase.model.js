@@ -129,6 +129,13 @@ const purchaseSchema = new mongoose.Schema(
       default: null,
     },
 
+    operationRevision: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -7,12 +7,10 @@ import PurchaseItem from "../models/purchase-item.model.js";
 import Supplier from "../models/supplier.model.js";
 import Product from "../models/product.model.js";
 import ProductVariant from "../models/product-variant.model.js";
+import { createServiceError as createBaseServiceError } from "../utils/service-error.util.js";
 
 function createServiceError(message, statusCode, code) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.code = code;
-  return error;
+  return createBaseServiceError(statusCode, code, message);
 }
 
 function isValidQuantity(value) {
@@ -68,6 +66,27 @@ export async function createPurchase({
       "At least one purchase item is required",
       400,
       "PURCHASE_ITEMS_REQUIRED",
+    );
+  }
+
+  if (items.length > 500) {
+    throw createServiceError(
+      "A purchase cannot contain more than 500 items",
+      400,
+      "TOO_MANY_PURCHASE_ITEMS",
+    );
+  }
+
+  if (
+    items.some(
+      (item) =>
+        item === null || typeof item !== "object" || Array.isArray(item),
+    )
+  ) {
+    throw createServiceError(
+      "Each purchase item must be a valid object",
+      400,
+      "INVALID_PURCHASE_ITEM",
     );
   }
 
@@ -340,7 +359,9 @@ export async function receivePurchase({
     !Array.isArray(items) ||
     items.length === 0 ||
     items.length > 500 ||
-    items.some((item) => !item || typeof item !== "object")
+    items.some(
+      (item) => !item || typeof item !== "object" || Array.isArray(item),
+    )
   ) {
     throw createServiceError(
       "Invalid receiving items",
@@ -395,6 +416,9 @@ export async function receivePurchase({
               status: { $in: ["ordered", "partially_received"] },
             },
             {
+              $inc: {
+                operationRevision: 1,
+              },
               $set: {
                 updatedBy: userId,
               },
@@ -585,7 +609,12 @@ export async function receivePurchase({
       } catch (error) {
         // If another transaction created the same inventory record
         // first, retry the entire transaction against the existing record.
-        if (error?.code === 11000 && duplicateKeyRetries < 2) {
+        const isInventoryDuplicate =
+          error?.code === 11000 &&
+          error?.keyPattern?.organization === 1 &&
+          error?.keyPattern?.variant === 1;
+
+        if (isInventoryDuplicate && duplicateKeyRetries < 2) {
           duplicateKeyRetries += 1;
           continue;
         }
@@ -633,43 +662,66 @@ export async function cancelPurchase({
     );
   }
 
-  const purchase = await Purchase.findOneAndUpdate(
-    {
-      _id: purchaseId,
-      organization: organizationId,
-      status: { $in: ["draft", "ordered"] },
-    },
-    {
-      $set: {
-        status: "cancelled",
-        cancelledAt: new Date(),
-        cancelledBy: userId,
-        cancellationReason: cancellationReason.trim(),
-        updatedBy: userId,
-      },
-    },
-    {
-      new: true,
-      runValidators: true,
-    },
-  );
+  const session = await mongoose.startSession();
 
-  if (!purchase) {
-    const existingPurchase = await Purchase.findOne({
-      _id: purchaseId,
-      organization: organizationId,
-    }).select("_id status");
+  let cancelledPurchase = null;
 
-    if (!existingPurchase) {
-      throw createServiceError("Purchase not found", 404, "PURCHASE_NOT_FOUND");
-    }
+  try {
+    await session.withTransaction(async () => {
+      const purchase = await Purchase.findOneAndUpdate(
+        {
+          _id: purchaseId,
+          organization: organizationId,
+          status: { $in: ["draft", "ordered"] },
+        },
+        {
+          $inc: {
+            operationRevision: 1,
+          },
+          $set: {
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelledBy: userId,
+            cancellationReason: cancellationReason.trim(),
+            updatedBy: userId,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        },
+      );
 
-    throw createServiceError(
-      "Only draft or ordered purchases can be cancelled",
-      400,
-      "PURCHASE_NOT_CANCELLABLE",
-    );
+      if (!purchase) {
+        const existingPurchase = await Purchase.findOne({
+          _id: purchaseId,
+          organization: organizationId,
+        })
+          .select("_id status")
+          .session(session)
+          .lean();
+
+        if (!existingPurchase) {
+          throw createServiceError(
+            "Purchase not found",
+            404,
+            "PURCHASE_NOT_FOUND",
+          );
+        }
+
+        throw createServiceError(
+          "Only draft or ordered purchases can be cancelled",
+          400,
+          "PURCHASE_NOT_CANCELLABLE",
+        );
+      }
+
+      cancelledPurchase = purchase;
+    });
+  } finally {
+    await session.endSession();
   }
 
-  return purchase;
+  return cancelledPurchase;
 }
