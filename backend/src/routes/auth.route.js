@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { env } from "../config/env.js";
 
 import {
   register,
@@ -65,12 +66,32 @@ const verificationVerifyRateLimit = createRateLimiter({
 const router = Router();
 
 function useRefreshCookie(req, res, next) {
-  if (!req.body?.refreshToken && req.cookies?.refreshToken) {
+  req.body ||= {};
+
+  if (!req.body.refreshToken && req.cookies?.refreshToken) {
+    const origin = req.get("Origin");
+
+    const allowedOrigins = new Set([
+      env.FRONTEND_URL,
+      ...(env.NODE_ENV === "development"
+        ? ["http://localhost:3000", "http://127.0.0.1:5500"]
+        : []),
+    ]);
+
+    if (!origin || !allowedOrigins.has(origin)) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: "CSRF_ORIGIN_REJECTED",
+          message: "Request origin is not allowed.",
+        },
+      });
+    }
+
     req.body.refreshToken = req.cookies.refreshToken;
   }
 
-  // A web visitor without a refresh cookie is simply unauthenticated.
-  if (!req.body?.refreshToken && req.get("X-Client-Type") === "web") {
+  if (!req.body.refreshToken && req.get("X-Client-Type") === "web") {
     return res.status(401).json({
       success: false,
       message: "Refresh session is unavailable.",
