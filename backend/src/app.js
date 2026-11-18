@@ -19,6 +19,7 @@ import supplierRoutes from "./routes/supplier.routes.js";
 import purchaseRoutes from "./routes/purchase.routes.js";
 import returnRoutes from "./routes/return.routes.js";
 import refundRoutes from "./routes/refund.routes.js";
+import salesReportRoutes from "./routes/sales-report.routes.js";
 import razorpayWebhookRoute from "./routes/razorpay-webhook.routes.js";
 
 import path from "node:path";
@@ -95,6 +96,7 @@ app.use("/api/organizations/:organizationId/purchases", purchaseRoutes);
 app.use("/api/organizations/:organizationId/returns", returnRoutes);
 app.use("/api/organizations/:organizationId/returns", refundRoutes);
 app.use("/api/organizations/:organizationId/sales", saleRoutes);
+app.use("/api/organizations/:organizationId/reports/sales", salesReportRoutes);
 app.use(
   "/api/organizations/:organizationId/sales/:saleId/payments",
   paymentRoutes,
