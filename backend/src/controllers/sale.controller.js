@@ -1,4 +1,9 @@
-import { createSale, getSales, getSaleById ,cancelSale } from "../services/sale.service.js";
+import {
+  createSale,
+  getSales,
+  getSaleById,
+  cancelSale,
+} from "../services/sale.service.js";
 
 export async function createSaleController(req, res, next) {
   try {
@@ -25,11 +30,7 @@ export async function getSalesController(req, res, next) {
   try {
     const result = await getSales({
       organizationId: req.organization.id,
-      status: req.query.status,
-      paymentStatus: req.query.paymentStatus,
-      customerId: req.query.customerId,
-      page: req.query.page,
-      limit: req.query.limit,
+      ...req.validatedQuery,
     });
 
     return res.status(200).json({

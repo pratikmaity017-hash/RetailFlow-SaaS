@@ -50,3 +50,17 @@ export const cancelSaleSchema = z
       .max(500, "Cancellation reason cannot exceed 500 characters"),
   })
   .strict();
+
+export const listSalesQuerySchema = z
+  .object({
+    status: z.enum(["completed", "cancelled"]).optional(),
+
+    paymentStatus: z.enum(["unpaid", "partially_paid", "paid"]).optional(),
+
+    customerId: objectIdSchema.optional(),
+
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();

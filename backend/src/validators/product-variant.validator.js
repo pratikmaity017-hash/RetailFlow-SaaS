@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+const attributesSchema = z
+  .record(
+    z
+      .string()
+      .min(1)
+      .max(50)
+      .regex(/^[A-Za-z][A-Za-z0-9 _-]*$/),
+    z.union([z.string().max(200), z.number().finite(), z.boolean()]),
+  )
+  .refine((attributes) => Object.keys(attributes).length <= 30, {
+    message: "Cannot provide more than 30 product attributes",
+  });
+
 export const createProductVariantSchema = z
   .object({
     sku: z
@@ -14,7 +27,7 @@ export const createProductVariantSchema = z
       .max(100, "Barcode cannot exceed 100 characters")
       .optional(),
 
-    attributes: z.record(z.string(), z.unknown()).optional(),
+    attributes: attributesSchema.optional(),
 
     costPrice: z.number().finite().min(0, "Cost price cannot be negative"),
 
@@ -31,7 +44,7 @@ export const updateProductVariantSchema = z
 
     barcode: z.string().trim().max(100).nullable().optional(),
 
-    attributes: z.record(z.string(), z.unknown()).optional(),
+    attributes: attributesSchema.optional(),
 
     costPrice: z.number().finite().min(0).optional(),
 

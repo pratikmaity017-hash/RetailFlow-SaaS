@@ -3,13 +3,14 @@ import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
-import { validate } from "../middlewares/validate.middleware.js";
+import { validate ,validateQuery} from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 
 import {
   createSaleSchema,
   cancelSaleSchema,
+  listSalesQuerySchema
 } from "../validators/sale.validator.js";
 
 import {
@@ -39,6 +40,7 @@ router.get(
   requireOrganization,
   requireFeature("sales_management"),
   authorize("owner", "manager", "sales_staff"),
+  validateQuery(listSalesQuerySchema),
   getSalesController,
 );
 
