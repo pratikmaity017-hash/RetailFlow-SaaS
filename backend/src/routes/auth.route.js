@@ -23,7 +23,44 @@ import {
 } from "../validators/auth.validator.js";
 
 import { authenticate } from "../middlewares/authenticate.middleware.js";
+import { createRateLimiter } from "../middlewares/rate-limit.middleware.js";
 import User from "../models/user.model.js";
+
+const registerRateLimit = createRateLimiter({
+  name: "auth-register",
+  limit: 10,
+  windowMs: 60 * 60 * 1000,
+});
+
+const loginRateLimit = createRateLimiter({
+  name: "auth-login",
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+});
+
+const googleLoginRateLimit = createRateLimiter({
+  name: "auth-google",
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+});
+
+const refreshRateLimit = createRateLimiter({
+  name: "auth-refresh",
+  limit: 30,
+  windowMs: 15 * 60 * 1000,
+});
+
+const verificationSendRateLimit = createRateLimiter({
+  name: "auth-verification-send",
+  limit: 5,
+  windowMs: 15 * 60 * 1000,
+});
+
+const verificationVerifyRateLimit = createRateLimiter({
+  name: "auth-verification-verify",
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+});
 
 const router = Router();
 
@@ -44,11 +81,20 @@ function useRefreshCookie(req, res, next) {
   next();
 }
 
-router.post("/register", validate(registerSchema), register);
-router.post("/login", validate(loginSchema), login);
-router.post("/google", validate(googleLoginSchema), googleLogin);
+router.post("/register", registerRateLimit, validate(registerSchema), register);
+
+router.post("/login", loginRateLimit, validate(loginSchema), login);
+
+router.post(
+  "/google",
+  googleLoginRateLimit,
+  validate(googleLoginSchema),
+  googleLogin,
+);
+
 router.post(
   "/refresh",
+  refreshRateLimit,
   useRefreshCookie,
   validate(refreshTokenSchema),
   refresh,
@@ -56,6 +102,7 @@ router.post(
 
 router.post(
   "/email-verification/send",
+  verificationSendRateLimit,
   authenticate,
   validate(sendEmailVerificationSchema),
   sendEmailVerificationController,
@@ -63,6 +110,7 @@ router.post(
 
 router.post(
   "/email-verification/verify",
+  verificationVerifyRateLimit,
   validate(verifyEmailSchema),
   verifyEmailController,
 );
