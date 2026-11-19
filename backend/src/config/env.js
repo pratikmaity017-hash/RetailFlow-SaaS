@@ -51,6 +51,9 @@ const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
 const RAZORPAY_WEBHOOK_SECRET =
   process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 
+const ADVANCED_SERVICE_API_KEY =
+  process.env.ADVANCED_SERVICE_API_KEY?.trim() || "";
+
 if (!allowedEnvironments.includes(NODE_ENV)) {
   throw new Error(
     `Invalid NODE_ENV: ${NODE_ENV}. Must be development, test, or production.`,
@@ -154,4 +157,6 @@ export const env = Object.freeze({
   RAZORPAY_KEY_ID,
   RAZORPAY_KEY_SECRET,
   RAZORPAY_WEBHOOK_SECRET,
+
+  ADVANCED_SERVICE_API_KEY,
 });
