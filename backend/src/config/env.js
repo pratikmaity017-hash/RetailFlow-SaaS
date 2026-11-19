@@ -116,6 +116,22 @@ const EMAIL_SECURE =
     ? true
     : EMAIL_SECURE_RAW.toLowerCase() === "true";
 
+const razorpaySettingsProvided = [
+  RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET,
+  RAZORPAY_WEBHOOK_SECRET,
+].some(Boolean);
+
+if (
+  NODE_ENV === "production" &&
+  razorpaySettingsProvided &&
+  (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET || !RAZORPAY_WEBHOOK_SECRET)
+) {
+  throw new Error(
+    "RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET must all be configured in production.",
+  );
+}
+
 export const env = Object.freeze({
   NODE_ENV,
   DEV_BYPASS_FEATURE_ENTITLEMENTS,
