@@ -22,6 +22,7 @@ const inventorySchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+      max: 999999999,
       default: 0,
       validate: {
         validator(value) {

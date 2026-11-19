@@ -339,17 +339,35 @@ export async function approveReturn({
             variant: item.variant,
           },
           {
-            $inc: { quantity: item.quantity },
+            $inc: {
+              quantity: {
+                $lte: 999999999 - item.quantity,
+              },
+            },
             $set: { updatedBy: userId },
           },
           { returnDocument: "after", session },
         );
 
         if (!inventory) {
+          const existingInventory = await Inventory.exists({
+            organization: organizationId,
+            product: item.product,
+            variant: item.variant,
+          }).session(session);
+
+          if (!existingInventory) {
+            throw createServiceError(
+              409,
+              "INVENTORY_NOT_FOUND",
+              `Inventory record not found for SKU ${item.sku}`,
+            );
+          }
+
           throw createServiceError(
             409,
-            "INVENTORY_NOT_FOUND",
-            `Inventory record not found for SKU ${item.sku}`,
+            "STOCK_QUANTITY_LIMIT_EXCEEDED",
+            `Stock quantity limit exceeded for SKU ${item.sku}`,
           );
         }
 
