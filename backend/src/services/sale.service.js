@@ -559,6 +559,14 @@ export const cancelSale = async ({
           { session },
         );
 
+        if (inventoryUpdate.matchedCount !== 1) {
+          throw createServiceError(
+            409,
+            "INVENTORY_UPDATE_CONFLICT",
+            "Could not restore inventory for a sale item",
+          );
+        }
+
         await StockMovement.create(
           [
             {
