@@ -18,6 +18,10 @@ function createServiceError(statusCode, code, message) {
   return error;
 }
 
+function normalizeQuantity(value) {
+  return Number(value.toFixed(3));
+}
+
 function generateReturnNumber() {
   return `RET-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
 }
@@ -28,7 +32,7 @@ function calculateRefundAmount(
   previousRefund,
   quantity,
 ) {
-  const cumulativeQuantity = previousQuantity + quantity;
+  const cumulativeQuantity = normalizeQuantity(previousQuantity + quantity);
 
   const cumulativeRefund =
     cumulativeQuantity >= saleItem.quantity
@@ -130,7 +134,7 @@ export async function createReturn({
           refundPaise: 0,
         };
 
-        current.quantity += item.quantity;
+        current.quantity = normalizeQuantity(current.quantity + item.quantity);
         current.refundPaise += item.refundAmountPaise;
 
         previousBySaleItem.set(key, current);
@@ -181,7 +185,9 @@ export async function createReturn({
           );
         }
 
-        totalQuantity += requestedItem.quantity;
+        totalQuantity = normalizeQuantity(
+          totalQuantity + requestedItem.quantity,
+        );
         totalRefundPaise += amount;
 
         returnItems.push({

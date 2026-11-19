@@ -41,6 +41,17 @@ const returnSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0.001,
+      max: 999999999,
+      validate: {
+        validator(value) {
+          return (
+            Number.isFinite(value) &&
+            Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+          );
+        },
+        message:
+          "Total quantity must be finite and have at most 3 decimal places",
+      },
     },
 
     totalRefundPaise: {
