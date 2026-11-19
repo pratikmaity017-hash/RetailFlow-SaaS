@@ -52,8 +52,8 @@ export async function getStockMovementsController(req, res, next) {
       organizationId: req.organization.id,
       productId: req.params.productId,
       variantId: req.params.variantId,
-      page: req.query.page,
-      limit: req.query.limit,
+      page: req.validatedQuery.page,
+      limit: req.validatedQuery.limit,
     });
 
     return res.status(200).json({
@@ -70,8 +70,8 @@ export async function getLowStockInventoryController(req, res, next) {
   try {
     const result = await getLowStockInventory({
       organizationId: req.organization.id,
-      page: req.query.page,
-      limit: req.query.limit,
+      page: req.validatedQuery.page,
+      limit: req.validatedQuery.limit,
     });
 
     return res.status(200).json({

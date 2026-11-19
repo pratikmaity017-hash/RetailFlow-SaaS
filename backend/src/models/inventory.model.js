@@ -23,11 +23,31 @@ const inventorySchema = new mongoose.Schema(
       required: true,
       min: 0,
       default: 0,
+      validate: {
+        validator(value) {
+          return (
+            Number.isFinite(value) &&
+            Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+          );
+        },
+        message: "Quantity can have at most 3 decimal places",
+      },
     },
+
     lowStockThreshold: {
       type: Number,
       required: true,
       min: 0,
+      max: 999999999,
+      validate: {
+        validator(value) {
+          return (
+            Number.isFinite(value) &&
+            Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+          );
+        },
+        message: "Value must be finite and have at most 3 decimal places",
+      },
       default: 5,
     },
     updatedBy: {

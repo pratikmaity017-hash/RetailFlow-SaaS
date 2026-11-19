@@ -98,6 +98,19 @@ export async function adjustStock({
         });
       }
 
+      if (
+        !Number.isFinite(newQuantity) ||
+        newQuantity < 0 ||
+        newQuantity > 999999999 ||
+        Math.abs(newQuantity * 1000 - Math.round(newQuantity * 1000)) >= 1e-7
+      ) {
+        throw createServiceError(
+          400,
+          "INVALID_STOCK_QUANTITY",
+          "Calculated stock quantity is invalid",
+        );
+      }
+
       inventory.quantity = newQuantity;
       inventory.updatedBy = userId;
 
@@ -232,7 +245,7 @@ export async function getStockMovements({
 
   // Normalize pagination values.
   const currentPage = Number.isInteger(Number(page))
-    ? Math.max(1, Number(page))
+    ? Math.min(10000, Math.max(1, Number(page)))
     : 1;
 
   const pageSize = Number.isInteger(Number(limit))
@@ -276,7 +289,7 @@ export async function getLowStockInventory({
 }) {
   // Normalize pagination.
   const currentPage = Number.isInteger(Number(page))
-    ? Math.max(1, Number(page))
+    ? Math.min(10000, Math.max(1, Number(page)))
     : 1;
 
   const pageSize = Number.isInteger(Number(limit))

@@ -2,7 +2,9 @@ import { z } from "zod";
 
 const quantitySchema = z
   .number()
+  .finite()
   .min(0, "Quantity cannot be negative")
+  .max(999999999, "Quantity exceeds the maximum allowed value")
   .refine(
     (value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
     "Quantity can have at most 3 decimal places",
@@ -21,3 +23,10 @@ export const stockAdjustmentSchema = z
     message: "Quantity must be greater than zero for stock_in and stock_out",
     path: ["quantity"],
   });
+
+export const inventoryPaginationQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();

@@ -31,6 +31,7 @@ const stockMovementSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0.001,
+      max: 999999999,
       validate: {
         validator(value) {
           return (
@@ -46,12 +47,14 @@ const stockMovementSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+      max: 999999999,
     },
 
     newQuantity: {
       type: Number,
       required: true,
       min: 0,
+      max: 999999999,
     },
 
     reason: {

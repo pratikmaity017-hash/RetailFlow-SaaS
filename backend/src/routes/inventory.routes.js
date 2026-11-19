@@ -3,11 +3,14 @@ import { Router } from "express";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { requireOrganization } from "../middlewares/organization.middleware.js";
 import { authorize } from "../middlewares/authorize.middleware.js";
-import { validate } from "../middlewares/validate.middleware.js";
+import { validate, validateQuery } from "../middlewares/validate.middleware.js";
 import { requireEmailVerified } from "../middlewares/require-email-verified.middleware.js";
 import { requireFeature } from "../middlewares/feature-entitlement.middleware.js";
 
-import { stockAdjustmentSchema } from "../validators/inventory.validator.js";
+import {
+  stockAdjustmentSchema,
+  inventoryPaginationQuerySchema,
+} from "../validators/inventory.validator.js";
 import {
   adjustStockController,
   getInventoryController,
@@ -42,6 +45,7 @@ router.get(
   requireEmailVerified,
   requireOrganization,
   requireFeature("inventory_management"),
+  validateQuery(inventoryPaginationQuerySchema),
   getStockMovementsController,
 );
 
