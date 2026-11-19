@@ -52,6 +52,16 @@ const saleItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0.001,
+      max: 1000000,
+      validate: {
+        validator(value) {
+          return (
+            Number.isFinite(value) &&
+            Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+          );
+        },
+        message: "Quantity must be finite and have at most 3 decimal places",
+      },
     },
 
     // All monetary values are stored as integer paise.

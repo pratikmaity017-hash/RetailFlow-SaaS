@@ -2,18 +2,21 @@ import { z } from "zod";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
-const saleItemSchema = z.object({
-  variantId: objectIdSchema,
+const saleItemSchema = z
+  .object({
+    variantId: objectIdSchema,
 
-  quantity: z
-    .number()
-    .positive("Quantity must be greater than zero")
-    .max(1000000, "Quantity is too large")
-    .refine(
-      (value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
-      "Quantity can have at most 3 decimal places",
-    ),
-});
+    quantity: z
+      .number()
+      .finite()
+      .positive("Quantity must be greater than zero")
+      .max(1000000, "Quantity is too large")
+      .refine(
+        (value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
+        "Quantity can have at most 3 decimal places",
+      ),
+  })
+  .strict();
 export const createSaleSchema = z
   .object({
     customerId: objectIdSchema.nullable().optional(),

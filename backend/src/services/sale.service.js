@@ -536,10 +536,21 @@ export const cancelSale = async ({
         const previousQuantity = Number(inventory.quantity);
         const newQuantity = Number((previousQuantity + quantity).toFixed(3));
 
+        if (!Number.isFinite(newQuantity) || newQuantity > 999999999) {
+          throw createServiceError(
+            409,
+            "INVENTORY_QUANTITY_LIMIT_EXCEEDED",
+            "Restored stock would exceed the maximum inventory quantity",
+          );
+        }
+
         const inventoryUpdate = await Inventory.updateOne(
           {
             _id: inventory._id,
             organization: organizationId,
+            quantity: {
+              $lte: 999999999 - quantity,
+            },
           },
           {
             $inc: { quantity },
@@ -547,14 +558,6 @@ export const cancelSale = async ({
           },
           { session },
         );
-
-        if (inventoryUpdate.matchedCount !== 1) {
-          throw createServiceError(
-            409,
-            "INVENTORY_UPDATE_CONFLICT",
-            "Could not restore inventory for a sale item",
-          );
-        }
 
         await StockMovement.create(
           [

@@ -52,11 +52,13 @@ const purchaseItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0.001,
+      max: 999999999,
       validate: {
         validator(value) {
           return Number.isFinite(value) && Number(value.toFixed(3)) === value;
         },
-        message: "Ordered quantity can have at most 3 decimal places",
+        message:
+          "Ordered quantity must be finite and have at most 3 decimal places",
       },
     },
 
@@ -65,11 +67,13 @@ const purchaseItemSchema = new mongoose.Schema(
       required: true,
       default: 0,
       min: 0,
+      max: 999999999,
       validate: {
         validator(value) {
           return Number.isFinite(value) && Number(value.toFixed(3)) === value;
         },
-        message: "Received quantity can have at most 3 decimal places",
+        message:
+          "Received quantity must be finite and have at most 3 decimal places",
       },
     },
 

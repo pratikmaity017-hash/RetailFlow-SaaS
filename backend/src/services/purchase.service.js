@@ -20,6 +20,7 @@ function isValidQuantity(value) {
     typeof value === "number" &&
     Number.isFinite(value) &&
     value >= 0.001 &&
+    value <= 999999999 &&
     Number(value.toFixed(3)) === value
   );
 }
@@ -533,18 +534,21 @@ export async function receivePurchase({
                 (previousQuantity + receivingItem.quantity).toFixed(3),
               );
 
-              if (!Number.isFinite(newQuantity) || newQuantity < 0) {
+              if (!Number.isFinite(newQuantity) || newQuantity > 999999999) {
                 throw createServiceError(
-                  "Inventory quantity is too large",
-                  400,
-                  "INVALID_INVENTORY_QUANTITY",
+                  "Inventory quantity exceeds the maximum allowed value",
+                  409,
+                  "INVENTORY_QUANTITY_LIMIT_EXCEEDED",
                 );
               }
 
               const inventoryUpdate = await Inventory.updateOne(
                 {
                   _id: inventory._id,
-                  quantity: previousQuantity,
+                  organization: organizationId,
+                  quantity: {
+                    $lte: 999999999 - receivingItem.quantity,
+                  },
                 },
                 {
                   $inc: {
@@ -556,7 +560,6 @@ export async function receivePurchase({
                 },
                 {
                   session,
-                  runValidators: true,
                 },
               );
 
