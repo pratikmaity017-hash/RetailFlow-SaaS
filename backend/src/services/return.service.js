@@ -337,12 +337,13 @@ export async function approveReturn({
             organization: organizationId,
             product: item.product,
             variant: item.variant,
+            quantity: {
+              $lte: 999999999 - item.quantity,
+            },
           },
           {
             $inc: {
-              quantity: {
-                $lte: 999999999 - item.quantity,
-              },
+              quantity: item.quantity,
             },
             $set: { updatedBy: userId },
           },
