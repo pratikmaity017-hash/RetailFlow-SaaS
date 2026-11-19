@@ -26,10 +26,10 @@ const plans = [
         sales_reports: true,
         returns_management: true,
 
-        advanced_analytics: false,
-        warehouse_management: false,
-        product_exchange: false,
-        advanced_inventory_reports: false,
+        advanced_analytics: true,
+        warehouse_management: true,
+        product_exchange: true,
+        advanced_inventory_reports: true,
       },
 
       limits: {
@@ -70,10 +70,10 @@ const plans = [
         sales_reports: true,
         returns_management: true,
 
-        advanced_analytics: false,
-        warehouse_management: false,
-        product_exchange: false,
-        advanced_inventory_reports: false,
+        advanced_analytics: true,
+        warehouse_management: true,
+        product_exchange: true,
+        advanced_inventory_reports: true,
       },
 
       limits: {
@@ -142,7 +142,7 @@ async function seedSubscriptionPlans() {
     updateOne: {
       filter: { code: plan.code },
       update: {
-        $setOnInsert: plan,
+        $set: plan,
       },
       upsert: true,
     },
