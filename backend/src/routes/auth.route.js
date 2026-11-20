@@ -74,7 +74,12 @@ function useRefreshCookie(req, res, next) {
     const allowedOrigins = new Set([
       env.FRONTEND_URL,
       ...(env.NODE_ENV === "development"
-        ? ["http://localhost:3000", "http://127.0.0.1:5500"]
+        ? [
+            "http://localhost:3000",
+            "http://127.0.0.1:5500",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+          ]
         : []),
     ]);
 
