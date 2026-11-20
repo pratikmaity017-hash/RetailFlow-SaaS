@@ -91,6 +91,73 @@ function getGroupExpression(groupBy, timezone) {
   };
 }
 
+function addCalendarDays(value, amount) {
+  const { year, month, day } = getDateParts(value);
+  const date = new Date(Date.UTC(year, month - 1, day + amount));
+
+  return formatCalendarDate(date);
+}
+
+function formatCalendarDate(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getTrendBucketStart(value, groupBy) {
+  const { year, month, day } = getDateParts(value);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (groupBy === "week") {
+    const mondayOffset = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - mondayOffset);
+  } else if (groupBy === "month") {
+    date.setUTCDate(1);
+  }
+
+  return formatCalendarDate(date);
+}
+
+function getNextTrendBucket(value, groupBy) {
+  if (groupBy === "day") {
+    return addCalendarDays(value, 1);
+  }
+
+  if (groupBy === "week") {
+    return addCalendarDays(value, 7);
+  }
+
+  const { year, month } = getDateParts(value);
+
+  return formatCalendarDate(new Date(Date.UTC(year, month, 1)));
+}
+
+function createTrendMap(from, to, groupBy, timezone) {
+  const trendMap = new Map();
+
+  let bucket = getTrendBucketStart(from, groupBy);
+
+  while (bucket <= to) {
+    const period = getUtcBoundary(bucket, timezone);
+    const key = period.toISOString();
+
+    trendMap.set(key, {
+      period,
+      totalSales: 0,
+      grossSalesPaise: 0,
+      returnAmountPaise: 0,
+      netSalesPaise: 0,
+      amountPaidPaise: 0,
+    });
+
+    bucket = getNextTrendBucket(bucket, groupBy);
+  }
+
+  return trendMap;
+}
+
 function toSafeInteger(value, fieldName) {
   const amount = Number(value ?? 0);
 
@@ -420,36 +487,36 @@ export async function getSalesReport({
     );
   }
 
-  const trendMap = new Map();
+  const trendMap = createTrendMap(from, to, groupBy, timezone);
 
   for (const item of salesTrends) {
-    trendMap.set(item._id.toISOString(), {
-      period: item._id,
-      totalSales: item.totalSales,
-      grossSalesPaise: item.grossSalesPaise,
-      returnAmountPaise: 0,
-      netSalesPaise: item.grossSalesPaise,
-      amountPaidPaise: item.amountPaidPaise,
-    });
+    const key = item._id.toISOString();
+    const existing = trendMap.get(key);
+
+    if (!existing) {
+      continue;
+    }
+
+    existing.totalSales = item.totalSales;
+    existing.grossSalesPaise = item.grossSalesPaise;
+    existing.amountPaidPaise = item.amountPaidPaise;
+
+    existing.netSalesPaise =
+      existing.grossSalesPaise - existing.returnAmountPaise;
   }
 
   for (const item of returnTrends) {
     const key = item._id.toISOString();
     const existing = trendMap.get(key);
 
-    if (existing) {
-      existing.returnAmountPaise = item.returnAmountPaise;
-      existing.netSalesPaise -= item.returnAmountPaise;
-    } else {
-      trendMap.set(key, {
-        period: item._id,
-        totalSales: 0,
-        grossSalesPaise: 0,
-        returnAmountPaise: item.returnAmountPaise,
-        netSalesPaise: -item.returnAmountPaise,
-        amountPaidPaise: 0,
-      });
+    if (!existing) {
+      continue;
     }
+
+    existing.returnAmountPaise = item.returnAmountPaise;
+
+    existing.netSalesPaise =
+      existing.grossSalesPaise - existing.returnAmountPaise;
   }
 
   return {
